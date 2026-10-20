@@ -1,0 +1,55 @@
+{
+  "steps": 4,
+  "gate": 0.9,
+  "pass": true,
+  "table": {
+    "real-0": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "real-1": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "real-2": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "shuf-0": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "shuf-1": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "shuf-2": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "er-0": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "er-1": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "er-2": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "real_randio-0": {
+      "edge_usage": 0.9999947431319018,
+      "readout_reach": 1.0
+    },
+    "real_randio-1": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "real_randio-2": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    }
+  }
+}
