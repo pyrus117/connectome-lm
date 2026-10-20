@@ -46,6 +46,19 @@ Arm `er` (not part of the primary contrast, so the choice cannot be tuned toward
 
 Off minus on, mean train loss per 10-step block: 0.008, 0.060, 0.172, 0.282, 0.348, 0.370, 0.370, 0.376. The gap opened over the first 40 steps and then held near 0.37 nats/token. No panel-link errors during either run. GPU 72 °C, 1,935 MHz, no sign of throttling; step time stayed near 6.7 s, so a full 12,207-step run would take about 23 hours on this laptop.
 
+## Pilot reference: traditional GPT trained the same way (scripts/pilot_standard_gpt.py)
+
+Same data order, schedule, 80 steps, seed 0 and starting weights for every shared tensor as the brain pilots. Each layer has an ordinary FFN instead of a brain step. The FFN runs under bf16 autocast (standard practice); the brain runs in float32, a small difference that is not controlled here.
+
+| Model | Params | Train loss per 10-step block | Val loss | s/step |
+|---|---|---|---|---|
+| Brain (ER wiring), norm on | 5,111,759 | 8.51 7.46 7.14 7.02 6.86 6.75 6.68 6.65 | 6.641 | 6.76 |
+| Brain (ER wiring), norm off | 5,111,759 | 8.52 7.52 7.32 7.31 7.21 7.12 7.05 7.03 | 7.002 | 6.44 |
+| Standard GPT, FFN 1,024 | 6,901,760 | 8.48 7.45 7.12 6.98 6.83 6.74 6.69 6.67 | 6.659 | 0.17 |
+| Standard GPT, FFN 442 (param-matched) | 5,110,364 | 8.50 7.48 7.20 7.10 6.95 6.84 6.78 6.75 | 6.738 | 0.15 |
+
+One seed, 80 steps (1.3M tokens): early training only. The brain arm here is the random ER control, so this says nothing about fly wiring. It does say the shared-brain design trains at least as well as an ordinary FFN of the same size early on, at about 40x the step time.
+
 ## CORRECTION: first-step active edges, three block designs
 
 The `active-at-init` column in the next section is wrong. It combined "pre lit after S−2 hops" with "post reaches a readout in S−2 hops", conditions from different passes. The correct test for pass j (1 … S−1) is: pre lit after j−1 hops AND post's effect reaches the output. Recomputed (same draws as below):
