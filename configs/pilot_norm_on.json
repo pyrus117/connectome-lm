@@ -1,0 +1,2 @@
+{"model": {"norm": true},
+ "train": {"tokens": 1310720, "micro": 4, "warmup": 10, "eval_every": 1000000, "eval_tokens": 65536, "ckpt_every": 1000000}}
