@@ -51,15 +51,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--budget-hours", type=float, required=True)
     ap.add_argument("--timed", type=int, default=5)
+    ap.add_argument("--micros", type=int, nargs="+", default=[16, 8, 4, 2])
+    # cap PyTorch below the card's limit: on this laptop the internal panel's
+    # link failed once while a test filled all 4 GB (2026-10-21)
+    ap.add_argument("--mem-fraction", type=float, default=1.0)
     args = ap.parse_args()
     device = torch.device("cuda")
+    torch.cuda.set_per_process_memory_fraction(args.mem_fraction, 0)
     steps_per_run = TrainConfig().tokens // (TrainConfig().batch * 256)
-    report = {"gpu": torch.cuda.get_device_name(), "steps": ModelConfig().steps, "layouts": {}}
+    report = {"gpu": torch.cuda.get_device_name(), "steps": ModelConfig().steps,
+              "micros_tried": args.micros, "mem_fraction": args.mem_fraction, "layouts": {}}
     for layout in LAYOUTS:
         mcfg = ModelConfig(conn_layers=layout)
         row = {}
         for arm in ("real", "dense"):
-            for micro in (16, 8, 4, 2):
+            for micro in args.micros:
                 torch.cuda.empty_cache()
                 torch.cuda.reset_peak_memory_stats()
                 try:
