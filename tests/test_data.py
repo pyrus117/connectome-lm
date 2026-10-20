@@ -1,3 +1,7 @@
+import json
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 import torch
@@ -14,9 +18,12 @@ def test_one_epoch_sampler_never_repeats_a_window():
 
 def test_sampler_depends_only_on_seed_and_step():
     a = batch_starts(10_000, 16, 8, 3, 5)
-    b = batch_starts(10_000, 16, 8, 3, 5)
     c = batch_starts(10_000, 16, 8, 4, 5)
-    np.testing.assert_array_equal(a, b)
+    # a resumed run, and every other arm, starts in a new process; the order is
+    # cached per process, so only a fresh interpreter can show it is seeded
+    code = "from clm.data import batch_starts; print(batch_starts(10_000, 16, 8, 3, 5).tolist())"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    np.testing.assert_array_equal(a, json.loads(out.stdout))
     assert not np.array_equal(a, c)
 
 
