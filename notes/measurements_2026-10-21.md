@@ -30,6 +30,22 @@ Projected totals (12 connectome runs + 3 dense): 980.6 h (all 6 layers), 334.1 h
 
 These are cool-GPU numbers and probably optimistic. The 20-step smoke run (layers 2, 3, micro 4, same code) slowed from 11.6 s to 16.3 s per step over its first steps and had a median of 23.6 s, about 3x the 8.2 s here. Likely thermal or power throttling under sustained load, not measured directly.
 
+## Pilot: per-step normalisation on vs off, shared-brain design (runs/pilot-norm-*)
+
+Arm `er` (not part of the primary contrast, so the choice cannot be tuned toward real vs shuffled), seed 0, 80 steps x 16,384 tokens (1.3M tokens), warmup 10, lr 1e-3, micro 4, RTX 3050 Laptop, EmbeddingGemma 2 running. Identical in everything except `norm`. One seed only.
+
+| | Norm on | Norm off |
+|---|---|---|
+| Train loss, step 0 | 9.052 | 9.067 |
+| Train loss, mean of steps 20–29 | 7.145 | 7.317 |
+| Train loss, mean of steps 40–49 | 6.859 | 7.207 |
+| Train loss, mean of last 10 steps | 6.651 | 7.027 |
+| Validation loss (first 65,536 val tokens), step 80 | 6.641 | 7.002 |
+| Grad norm, median / max | 0.49 / 2.87 | 0.31 / 5.56 |
+| Seconds per step, median | 6.76 | 6.44 |
+
+Off minus on, mean train loss per 10-step block: 0.008, 0.060, 0.172, 0.282, 0.348, 0.370, 0.370, 0.376. The gap opened over the first 40 steps and then held near 0.37 nats/token. No panel-link errors during either run. GPU 72 °C, 1,935 MHz, no sign of throttling; step time stayed near 6.7 s, so a full 12,207-step run would take about 23 hours on this laptop.
+
 ## CORRECTION: first-step active edges, three block designs
 
 The `active-at-init` column in the next section is wrong. It combined "pre lit after S−2 hops" with "post reaches a readout in S−2 hops", conditions from different passes. The correct test for pass j (1 … S−1) is: pre lit after j−1 hops AND post's effect reaches the output. Recomputed (same draws as below):
