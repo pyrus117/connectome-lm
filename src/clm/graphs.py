@@ -57,22 +57,38 @@ def load_region(path):
     return n, pre, post
 
 
-def degree_preserving_shuffle(n, pre, post, rng, max_rounds=1000):
+def degree_preserving_shuffle(n, pre, post, rng, max_passes=20, tries=1000):
     """Permute post ends across edges, so every neuron keeps its in- and out-degree.
 
-    The permutation creates some self-loops and duplicate edges; those, plus a
-    random sample of clean edges, are re-permuted until none remain. Permuting
-    post ends among edges never changes any neuron's degree.
+    The permutation leaves some self-loops and duplicate edges. Each is then
+    fixed by a targeted swap with a random edge, (a->b, c->d) to (a->d, c->b),
+    accepted only when both new edges are new and not self-loops (Maslov and
+    Sneppen 2002). Random re-permutation does not converge on the mushroom
+    body: its hubs take input from half of all neurons, so it plateaus near
+    8,000 conflicts.
     """
     post = rng.permutation(post)
-    for _ in range(max_rounds):
+    for _ in range(max_passes):
         bad = np.flatnonzero(bad_edges(n, pre, post))
         if bad.size == 0:
             return post
-        extra = rng.choice(post.size, size=min(post.size, 10 * bad.size), replace=False)
-        idx = np.unique(np.concatenate([bad, extra]))
-        post[idx] = post[rng.permutation(idx)]
-    raise RuntimeError(f"shuffle still has conflicts after {max_rounds} rounds")
+        keys, counts = np.unique(pre * n + post, return_counts=True)
+        count = dict(zip(keys.tolist(), counts.tolist()))
+        for i in rng.permutation(bad).tolist():
+            a, b = int(pre[i]), int(post[i])
+            if a != b and count[a * n + b] == 1:
+                continue                    # an earlier swap already fixed it
+            for j in rng.integers(0, post.size, size=tries).tolist():
+                c, d = int(pre[j]), int(post[j])
+                ad, cb = a * n + d, c * n + b
+                if a == d or c == b or ad == cb or count.get(ad, 0) or count.get(cb, 0):
+                    continue
+                for k in (a * n + b, c * n + d):
+                    count[k] -= 1
+                count[ad], count[cb] = 1, 1
+                post[i], post[j] = d, b
+                break
+    raise RuntimeError(f"shuffle still has conflicts after {max_passes} passes")
 
 
 def erdos_renyi(n, m, rng):
