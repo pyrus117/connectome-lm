@@ -1,0 +1,79 @@
+{
+  "source": "FlyWire v783 via fly-criticality cache",
+  "inputs": {
+    "csr": {
+      "path": "/home/nate/Projects/fly-criticality/data/csr_real.npz",
+      "sha256": "4dc5241083d9a10eab35a86fc37ed1ba5f741f9e64655b8636b7f0710c8e6cac"
+    },
+    "completeness": {
+      "path": "/home/nate/Projects/fly-criticality/data/Completeness_783.csv",
+      "sha256": "bbb847a4cc2caaa7a16349722d220c087317b946d148d4d592d94d250617a311"
+    },
+    "annotations": {
+      "path": "/home/nate/Projects/fly-criticality/data/annotations/neuron_annotations.tsv",
+      "sha256": "b214970b55d2fbe0853bba536fdcb9e28730f4eb7ab06f600491df795da683cd"
+    }
+  },
+  "weights": "signed synapse count (sign from presynaptic neurotransmitter)",
+  "licence": {
+    "connectivity": "CC-BY-4.0, FlyWire Whole-brain Connectome Connectivity Data v783, zenodo.org/records/10676866",
+    "annotations": "CC-BY-4.0, Schlegel et al. 2024 supplemental files, zenodo.org/records/10877326",
+    "cite": [
+      "Dorkenwald et al. 2024, Nature, Neuronal wiring diagram of an adult brain",
+      "Schlegel et al. 2024, Nature, Whole-brain annotation and multi-connectome cell typing",
+      "Codex: doi 10.13140/RG.2.2.35928.67844"
+    ]
+  },
+  "regions": {
+    "mb_alpn": {
+      "cell_classes": [
+        "ALPN",
+        "Kenyon_Cell",
+        "MBON",
+        "DAN",
+        "MBIN"
+      ],
+      "file": "mb_alpn_783.npz",
+      "sha256": "14695c1c43946f9744e4710ddb150b52a3b61d3737140700b1600ddbe4782122",
+      "neurons": 6293,
+      "edges": 570682,
+      "density": 0.014410488762784788,
+      "self_loops": 0,
+      "inhibitory_edge_fraction": 0.031132925166730333,
+      "in_degree_mean_max": [
+        90.68520578420467,
+        3217
+      ],
+      "zero_in_degree": 0,
+      "zero_out_degree": 2,
+      "classes": {
+        "ALPN": 685,
+        "DAN": 331,
+        "Kenyon_Cell": 5177,
+        "MBIN": 4,
+        "MBON": 96
+      }
+    },
+    "cx": {
+      "cell_classes": [
+        "CX"
+      ],
+      "file": "cx_783.npz",
+      "sha256": "c7154aa9d37c1cd2a56b4a241f1ecb4be3a4b114bf5b86a7cd5ffc5ccc59aa01",
+      "neurons": 2875,
+      "edges": 300234,
+      "density": 0.03632320604914934,
+      "self_loops": 0,
+      "inhibitory_edge_fraction": 0.4557045504506485,
+      "in_degree_mean_max": [
+        104.42921739130435,
+        582
+      ],
+      "zero_in_degree": 0,
+      "zero_out_degree": 2,
+      "classes": {
+        "CX": 2875
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+[project]
+name = "connectome-lm"
+version = "0.1.0"
+requires-python = ">=3.12"
+# torch, numpy, scipy and pytest come from the system site-packages (CUDA torch build)
+dependencies = ["tokenizers", "pyarrow"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
