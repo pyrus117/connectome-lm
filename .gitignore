@@ -2,5 +2,6 @@
 __pycache__/
 data/raw/
 data/fineweb/*.bin
+data/fineweb/*_ids.txt
 runs/
 *.egg-info/
