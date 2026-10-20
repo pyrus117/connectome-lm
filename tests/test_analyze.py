@@ -45,15 +45,14 @@ def test_check_run_names_each_defect(change, fragment):
 
 def test_check_run_passes_a_good_run_and_flags_a_missing_one():
     assert check_run(GOOD, 100, "f") == []
-    assert check_run({**GOOD, "fingerprints": []}, 100, None) == []
     assert check_run(None, 100, "f") == ["missing results.json"]
-    assert "wiring" in check_run(GOOD, 100, None)[0]
+    assert "fingerprint" in check_run({**GOOD, "fingerprints": []}, 100, "f")[0]
 
 
 def write_runs(tmp_path, region, loss_of):
     for arm in ("real", "shuf", "er", "real_randio", "dense"):
         for seed in range(3):
-            fp = [] if arm == "dense" else [make_wiring(region, arm, seed, 8).fingerprint()]
+            fp = [make_wiring(region, arm, seed, 8).fingerprint()]
             d = tmp_path / "runs" / f"{arm}-{seed}"
             d.mkdir(parents=True)
             (d / "results.json").write_text(json.dumps(

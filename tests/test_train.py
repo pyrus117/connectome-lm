@@ -28,8 +28,7 @@ def tiny(tmp_path, region):
     rng = np.random.default_rng(0)
     for name, n in (("train.bin", 40_000), ("val.bin", 2_000)):
         rng.integers(0, 64, n).astype(np.uint16).tofile(tmp_path / name)
-    mcfg = ModelConfig(vocab=64, ctx=16, d_model=16, n_layer=2, n_head=2, conn_layers=(1,),
-                       steps=4, leak=0.5, k_io=8)
+    mcfg = ModelConfig(vocab=64, ctx=16, d_model=16, n_layer=3, n_head=2, leak=0.5, k_io=8)
     tcfg = TrainConfig(region=str(region), train_bin=str(tmp_path / "train.bin"),
                        val_bin=str(tmp_path / "val.bin"), tokens=6 * 8 * 16, batch=8, micro=4,
                        warmup=2, eval_every=3, eval_tokens=512, ckpt_every=100)
@@ -64,10 +63,11 @@ def test_completed_run_reports_what_the_analysis_checks(tiny):
     assert log[-1]["val_loss"] == r["final_val_loss"]
 
 
-def test_dense_run_carries_no_wiring(tiny):
+def test_dense_run_records_the_fully_connected_wiring(tiny):
     mcfg, tcfg, tmp = tiny
     run("dense", 0, mcfg, tcfg, tmp / "d", CPU)
-    assert json.loads((tmp / "d" / "results.json").read_text())["fingerprints"] == []
+    assert (json.loads((tmp / "d" / "results.json").read_text())["fingerprints"]
+            == [make_wiring(tcfg.region, "dense", 0, 8).fingerprint()])
 
 
 def test_non_finite_loss_stops_the_run_and_records_divergence(tiny, monkeypatch):
@@ -98,6 +98,6 @@ def test_resume_refuses_a_checkpoint_from_another_arm(tiny):
 
 def test_config_file_with_an_unknown_key_is_refused(tmp_path):
     p = tmp_path / "c.json"
-    p.write_text(json.dumps({"model": {"conn_layers": [0], "typo": 1}, "train": {}}))
+    p.write_text(json.dumps({"model": {"leak": 0.5, "typo": 1}, "train": {}}))
     with pytest.raises(TypeError):
         T.load_config(p)

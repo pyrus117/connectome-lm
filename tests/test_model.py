@@ -5,8 +5,7 @@ from clm.model import ModelConfig, RUN_ARMS, build_model
 
 
 def cfg(**kw):
-    base = dict(vocab=64, ctx=16, d_model=16, n_layer=2, n_head=2, conn_layers=(0, 1),
-                steps=4, leak=0.5, k_io=8)
+    base = dict(vocab=64, ctx=16, d_model=16, n_layer=4, n_head=2, leak=0.5, k_io=8)
     return ModelConfig(**{**base, **kw})
 
 
@@ -23,21 +22,45 @@ def test_logits_at_a_position_ignore_later_tokens(region):
         assert (a[0, 10] - b[0, 10]).abs().max() > 1e-4, arm
 
 
+def test_every_layer_uses_one_shared_brain(region):
+    m = build_model(cfg(), "real", 0, region)
+    assert [n for n, _ in m.named_parameters() if n.startswith("brain.")] == ["brain.values", "brain.bias"]
+    assert m.brain.fingerprint == make_wiring(region, "real", 0, 8).fingerprint()
+
+
+def test_each_layer_receives_the_state_the_previous_layer_left(region):
+    m = build_model(cfg(), "shuf", 0, region)
+    seen = {}
+    for i, layer in enumerate(m.layers):
+        layer.register_forward_hook(lambda mod, args, out, i=i: seen.update({i: (args[1], out[1])}))
+    m(torch.randint(0, 64, (2, 16), generator=torch.Generator().manual_seed(2)))
+    assert seen[0][0] is None                                # empty at the first layer
+    for i in range(1, len(m.layers)):
+        assert torch.equal(seen[i][0], seen[i - 1][1]), i
+
+
+def test_brain_state_stays_float32_under_bf16_autocast(region):
+    m = build_model(cfg(), "real", 0, region)
+    seen = []
+    m.layers[-1].register_forward_hook(lambda mod, args, out: seen.append(out[1].dtype))
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        m(torch.randint(0, 64, (1, 16)))
+    assert seen == [torch.float32]
+
+
 def test_parameters_shared_by_two_arms_start_identical(region):
-    c = cfg(conn_layers=(1,))
-    real = dict(build_model(c, "real", 3, region).named_parameters())
-    for arm in ("shuf", "er", "real_randio", "dense"):
-        other = dict(build_model(c, arm, 3, region).named_parameters())
-        shared = [n for n in real if n in other and real[n].shape == other[n].shape
-                  and not n.startswith("layers.1.ffn")]
-        assert len(shared) > 10, arm
+    real = dict(build_model(cfg(), "real", 3, region).named_parameters())
+    for arm in RUN_ARMS[1:]:
+        other = dict(build_model(cfg(), arm, 3, region).named_parameters())
+        shared = [n for n in real if not n.startswith("brain.")]
+        assert len(shared) > 10 and all(n in other for n in shared), arm
         for n in shared:
             assert torch.equal(real[n], other[n]), (arm, n)
 
 
-def test_connectome_values_start_from_the_same_draws_in_real_and_shuffled_arms(region):
-    a = build_model(cfg(), "real", 0, region).layers[0].ffn.values
-    b = build_model(cfg(), "shuf", 0, region).layers[0].ffn.values
+def test_brain_values_start_from_the_same_draws_in_real_and_shuffled_arms(region):
+    a = build_model(cfg(), "real", 0, region).brain.values
+    b = build_model(cfg(), "shuf", 0, region).brain.values
     assert torch.equal(a, b)
 
 
@@ -47,19 +70,13 @@ def test_a_different_seed_changes_the_init(region):
     assert not torch.equal(a, b)
 
 
-def test_connectome_arms_share_one_parameter_count_and_dense_matches_it(region):
+def test_sparse_arms_share_one_parameter_count_and_dense_is_within_one_neuron(region):
     counts = {arm: sum(p.numel() for p in build_model(cfg(), arm, 0, region).parameters())
               for arm in RUN_ARMS}
-    conn = {counts[a] for a in RUN_ARMS if a != "dense"}
-    assert len(conn) == 1
-    assert abs(counts["dense"] - conn.pop()) <= 2 * (16 + 0.5)   # two layers, half a unit each
-
-
-def test_conn_layers_hold_the_arms_wiring_and_other_layers_hold_a_standard_ffn(region):
-    m = build_model(cfg(n_layer=3, conn_layers=(1,)), "shuf", 2, region)
-    assert [type(l.ffn).__name__ for l in m.layers] == ["DenseFFN", "ConnectomeFFN", "DenseFFN"]
-    assert m.layers[1].ffn.fingerprint == make_wiring(region, "shuf", 2, 8).fingerprint()
-    assert m.layers[0].ffn.fc.out_features == 4 * 16
+    sparse = {counts[a] for a in RUN_ARMS if a != "dense"}
+    assert len(sparse) == 1
+    n_dense = make_wiring(region, "dense", 0, 8).n
+    assert abs(counts["dense"] - sparse.pop()) <= n_dense
 
 
 def test_each_arm_can_memorise_one_batch(region):

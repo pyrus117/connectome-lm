@@ -32,9 +32,18 @@ def test_no_arm_has_self_loops_or_duplicate_edges(region):
         assert not bad_edges(w.n, w.pre, w.post).any(), arm
 
 
-def test_every_arm_has_the_real_edge_count(region):
+def test_every_sparse_arm_has_the_real_edge_count(region):
     n_real = make_wiring(region, "real", 0, K).nnz
-    assert [make_wiring(region, a, 0, K).nnz for a in ARMS] == [n_real] * len(ARMS)
+    sparse = [a for a in ARMS if a != "dense"]
+    assert [make_wiring(region, a, 0, K).nnz for a in sparse] == [n_real] * len(sparse)
+
+
+def test_dense_arm_is_fully_connected_and_matches_the_regions_parameters(region):
+    real, dense = make_wiring(region, "real", 0, K), make_wiring(region, "dense", 0, K)
+    assert dense.nnz == dense.n * (dense.n - 1)           # every pair, no self-loops
+    target = real.nnz + real.n                             # weights + biases
+    assert abs((dense.nnz + dense.n) - target) <= dense.n  # nearest whole neuron count
+    assert dense.fingerprint() == make_wiring(region, "dense", 3, K).fingerprint()
 
 
 def test_er_erases_the_hubs(region):
@@ -83,7 +92,7 @@ def test_edges_are_sorted_by_post_then_pre(region):
 
 def test_unknown_arm_is_rejected(region):
     with pytest.raises(ValueError, match="unknown arm"):
-        make_wiring(region, "dense", 0, K)
+        make_wiring(region, "standard_ffn", 0, K)
 
 
 def test_region_with_a_duplicate_edge_is_rejected(tmp_path):

@@ -17,7 +17,6 @@ from pathlib import Path
 
 import torch
 
-from clm.block import ConnectomeFFN
 from clm.data import batch_starts, eval_windows, get_batch, open_tokens
 from clm.model import ModelConfig, RUN_ARMS, build_model
 
@@ -51,8 +50,7 @@ def lr_at(step, steps, cfg):
 
 def load_config(path):
     raw = json.loads(Path(path).read_text())
-    model = {**raw["model"], "conn_layers": tuple(raw["model"]["conn_layers"])}
-    return ModelConfig(**model), TrainConfig(**raw["train"])
+    return ModelConfig(**raw["model"]), TrainConfig(**raw["train"])
 
 
 def _sha256(path):
@@ -154,7 +152,7 @@ def run(arm, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     commit, dirty = _git()
     _write(out / "results.json", {
         "status": "complete", "arm": arm, "seed": seed,
-        "fingerprints": sorted({m.fingerprint for m in model.modules() if isinstance(m, ConnectomeFFN)}),
+        "fingerprints": [model.brain.fingerprint],
         "params_total": sum(p.numel() for p in model.parameters()),
         "tokens_seen": steps * tcfg.batch * mcfg.ctx, "steps": steps,
         "final_val_loss": val_loss,

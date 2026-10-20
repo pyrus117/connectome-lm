@@ -1,18 +1,20 @@
-"""Wiring for the connectome block: the real region and its null models.
+"""Wiring for the shared brain: the real region and its controls.
 
-An arm is a directed edge list over the same N neurons. Edges run pre -> post;
-the block computes post activity from pre activity, so the sparse matrix is
-indexed [post, pre], and edges are kept sorted by (post, pre), the order torch
-calls coalesced.
+An arm is a directed edge list. Edges run pre -> post; the brain computes post
+activity from pre activity, so the sparse matrix is indexed [post, pre], and
+edges are kept sorted by (post, pre), the order torch calls coalesced. Every
+arm except `dense` uses the region's N neurons and edge count; `dense` is a
+fully connected brain sized so its weights plus biases match the region's.
 """
 import hashlib
+import math
 from dataclasses import dataclass
 
 import numpy as np
 
-ARMS = ("real", "shuf", "er", "real_randio")
+ARMS = ("real", "shuf", "er", "real_randio", "dense")
 K_IO = 256
-_ARM_TAG = {"real": 0, "shuf": 1, "er": 2, "real_randio": 3}
+_ARM_TAG = {"real": 0, "shuf": 1, "er": 2, "real_randio": 3, "dense": 4}
 
 
 @dataclass(frozen=True, eq=False)
@@ -118,13 +120,24 @@ def select_io(n, post, k, rng=None):
     return np.sort(order[:k]), np.sort(order[::-1][:k])
 
 
+def dense_size(n, nnz):
+    """Neurons in a fully connected brain whose n*(n-1) weights + n biases is
+    closest to the region's nnz weights + n biases."""
+    return round(math.sqrt(nnz + n))
+
+
 def make_wiring(region_path, arm, seed, k=K_IO):
     if arm not in ARMS:
         raise ValueError(f"unknown arm {arm!r}; expected one of {ARMS}")
     n, pre, post = load_region(region_path)
     rng = np.random.default_rng([seed, _ARM_TAG[arm]])
-    if arm == "real":
-        seed = 0            # the real wiring is the same at every seed
+    if arm == "dense":
+        n = dense_size(n, pre.size)
+        pre, post = (a.ravel() for a in np.meshgrid(np.arange(n), np.arange(n)))
+        keep = pre != post
+        pre, post = pre[keep], post[keep]
+    if arm in ("real", "dense"):
+        seed = 0            # these wirings are the same at every seed
     elif arm == "shuf":
         post = degree_preserving_shuffle(n, pre, post, rng)
     elif arm == "er":

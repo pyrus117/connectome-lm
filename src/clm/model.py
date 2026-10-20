@@ -1,4 +1,4 @@
-"""A small pre-norm GPT whose FFN slots can hold a connectome block."""
+"""A small pre-norm GPT whose layers share one recurrent brain instead of FFNs."""
 import hashlib
 import math
 from dataclasses import dataclass
@@ -7,11 +7,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from clm.block import ConnectomeFFN, DenseFFN, connectome_param_count, matched_hidden
-from clm.graphs import make_wiring
+from clm.block import SharedBrain
+from clm.graphs import ARMS, make_wiring
 
-RUN_ARMS = ("real", "shuf", "er", "real_randio", "dense")
-_RESIDUAL = (".attn.proj.weight", ".ffn.proj.weight", ".ffn.w_out.weight")
+RUN_ARMS = ARMS
+_RESIDUAL = (".attn.proj.weight", ".w_out.weight")
 _NORM_WEIGHT = ("ln1.weight", "ln2.weight", "ln_f.weight")
 
 
@@ -22,10 +22,9 @@ class ModelConfig:
     d_model: int = 256
     n_layer: int = 6
     n_head: int = 4
-    conn_layers: tuple = (0, 1, 2, 3, 4, 5)
-    steps: int = 4
     leak: float = 0.5
     k_io: int = 256
+    norm: bool = True
 
 
 class Attention(nn.Module):
@@ -43,29 +42,39 @@ class Attention(nn.Module):
 
 
 class Layer(nn.Module):
-    def __init__(self, cfg, ffn):
+    """Attention, then one step of the shared brain in place of an FFN."""
+
+    def __init__(self, cfg):
         super().__init__()
         self.ln1, self.ln2 = nn.LayerNorm(cfg.d_model), nn.LayerNorm(cfg.d_model)
-        self.attn, self.ffn = Attention(cfg), ffn
+        self.attn = Attention(cfg)
+        self.w_in = nn.Linear(cfg.d_model, cfg.k_io, bias=False)
+        self.w_out = nn.Linear(cfg.k_io, cfg.d_model, bias=False)
 
-    def forward(self, x):
+    def forward(self, x, h, brain):
         x = x + self.attn(self.ln1(x))
-        return x + self.ffn(self.ln2(x))
+        with torch.autocast(x.device.type, enabled=False):
+            u = self.ln2(x).reshape(-1, x.shape[-1]).float()
+            h = brain.step(h, self.w_in(u))
+            y = self.w_out(brain.read(h)).reshape(x.shape)
+        return x + y, h
 
 
 class GPT(nn.Module):
-    def __init__(self, cfg, ffns):
+    def __init__(self, cfg, brain):
         super().__init__()
         self.cfg = cfg
         self.tok = nn.Embedding(cfg.vocab, cfg.d_model)
         self.pos = nn.Embedding(cfg.ctx, cfg.d_model)
-        self.layers = nn.ModuleList(Layer(cfg, f) for f in ffns)
+        self.brain = brain
+        self.layers = nn.ModuleList(Layer(cfg) for _ in range(cfg.n_layer))
         self.ln_f = nn.LayerNorm(cfg.d_model)
 
     def forward(self, idx, targets=None):
         x = self.tok(idx) + self.pos(torch.arange(idx.shape[1], device=idx.device))
+        h = None                          # the brain starts empty for every token
         for layer in self.layers:
-            x = layer(x)
+            x, h = layer(x, h, self.brain)
         logits = self.ln_f(x) @ self.tok.weight.t()          # tied embeddings
         if targets is None:
             return logits, None
@@ -86,9 +95,8 @@ def init_weights(model, seed):
     with torch.no_grad():
         for name, p in model.named_parameters():
             g = torch.Generator().manual_seed(_seed_for(seed, name))
-            if name.endswith(".values"):
-                ffn = model.get_submodule(name.rsplit(".", 1)[0])
-                new = torch.randn(p.shape, generator=g) * ffn.init_std.cpu()
+            if name == "brain.values":
+                new = torch.randn(p.shape, generator=g) * model.brain.init_std.cpu()
             elif p.dim() == 1:
                 new = torch.ones(p.shape) if name.endswith(_NORM_WEIGHT) else torch.zeros(p.shape)
             else:
@@ -100,15 +108,7 @@ def init_weights(model, seed):
 def build_model(cfg, arm, seed, region):
     if arm not in RUN_ARMS:
         raise ValueError(f"unknown arm {arm!r}; expected one of {RUN_ARMS}")
-    if arm == "dense":
-        ref = make_wiring(region, "real", seed, cfg.k_io)
-        hidden = matched_hidden(cfg.d_model, connectome_param_count(cfg.d_model, ref))
-        slot = lambda: DenseFFN(cfg.d_model, hidden)
-    else:
-        wiring = make_wiring(region, arm, seed, cfg.k_io)
-        slot = lambda: ConnectomeFFN(cfg.d_model, wiring, cfg.steps, cfg.leak)
-    ffns = [slot() if i in cfg.conn_layers else DenseFFN(cfg.d_model, 4 * cfg.d_model)
-            for i in range(cfg.n_layer)]
-    model = GPT(cfg, ffns)
+    brain = SharedBrain(make_wiring(region, arm, seed, cfg.k_io), cfg.leak, cfg.norm)
+    model = GPT(cfg, brain)
     init_weights(model, seed)
     return model

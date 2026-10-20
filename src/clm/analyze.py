@@ -30,9 +30,7 @@ def check_run(result, tokens, fingerprint):
         problems.append(f"non-finite final_val_loss {loss!r}")
     if result.get("tokens_seen") != tokens:
         problems.append(f"tokens_seen {result.get('tokens_seen')} != {tokens}")
-    if fingerprint is None and result.get("fingerprints"):
-        problems.append("dense run carries a wiring")
-    elif fingerprint is not None and result.get("fingerprints") != [fingerprint]:
+    if result.get("fingerprints") != [fingerprint]:
         problems.append("wiring fingerprint does not match this arm and seed")
     return problems
 
@@ -62,7 +60,7 @@ def analyze(runs_dir, region, tokens, seeds, k_io=256):
             name = f"{arm}-{seed}"
             path = runs_dir / name / "results.json"
             result = json.loads(path.read_text()) if path.exists() else None
-            fp = None if arm == "dense" else make_wiring(region, arm, seed, k_io).fingerprint()
+            fp = make_wiring(region, arm, seed, k_io).fingerprint()
             problems = check_run(result, tokens, fp)
             if problems:
                 invalid[name] = problems

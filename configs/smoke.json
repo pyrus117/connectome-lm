@@ -1,2 +1,2 @@
-{"model": {"conn_layers": [2, 3], "steps": 4},
+{"model": {},
  "train": {"tokens": 327680, "micro": 4, "warmup": 5, "eval_every": 1000000, "eval_tokens": 16384, "ckpt_every": 1000000}}

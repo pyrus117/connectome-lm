@@ -1,18 +1,20 @@
-"""Gate: at steps = 4, every arm must start with its wiring in use (PREREG.md section 3).
+"""Gate: every arm must start with its wiring in use (PREREG.md section 3).
 
+The shared brain takes one step per layer, so `steps` here is the layer count.
 For every arm and seeds 0-2, at least 90% of edges must get a gradient on the
 first step (edge_usage) and at least 90% of readout neurons must be reached by
-input activity (readout_reach). Uses the graph only, no text data.
+input activity by the last layer (readout_reach). Uses the graph only.
 """
 import json
 import sys
 from pathlib import Path
 
 from clm.graphs import ARMS, edge_usage, make_wiring, readout_reach
+from clm.model import ModelConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 REGION = ROOT / "data" / "mb_alpn_783.npz"
-STEPS, GATE = 4, 0.9
+STEPS, GATE = ModelConfig().n_layer, 0.9
 
 
 def main():

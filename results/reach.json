@@ -1,5 +1,5 @@
 {
-  "steps": 4,
+  "steps": 6,
   "gate": 0.9,
   "pass": true,
   "table": {
@@ -40,7 +40,7 @@
       "readout_reach": 1.0
     },
     "real_randio-0": {
-      "edge_usage": 0.9999947431319018,
+      "edge_usage": 1.0,
       "readout_reach": 1.0
     },
     "real_randio-1": {
@@ -48,6 +48,18 @@
       "readout_reach": 1.0
     },
     "real_randio-2": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "dense-0": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "dense-1": {
+      "edge_usage": 1.0,
+      "readout_reach": 1.0
+    },
+    "dense-2": {
       "edge_usage": 1.0,
       "readout_reach": 1.0
     }
