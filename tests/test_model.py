@@ -36,6 +36,7 @@ def test_each_layer_receives_the_state_the_previous_layer_left(region):
     m(torch.randint(0, 64, (2, 16), generator=torch.Generator().manual_seed(2)))
     assert seen[0][0] is None                                # empty at the first layer
     for i in range(1, len(m.layers)):
+        assert seen[i][0] is not None, f"layer {i} received no state"
         assert torch.equal(seen[i][0], seen[i - 1][1]), i
 
 

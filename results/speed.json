@@ -1,44 +1,24 @@
 {
   "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
-  "steps": 4,
   "micros_tried": [
-    4,
-    2,
-    1
+    4
   ],
   "mem_fraction": 0.75,
-  "layouts": {
-    "(0, 1, 2, 3, 4, 5)": {
-      "real": {
-        "micro": 4,
-        "sec_per_step": 24.039953589439392,
-        "peak_gb": 2.16826368,
-        "hours_per_run": 81.51547596285741
-      },
-      "dense": {
-        "micro": 4,
-        "sec_per_step": 0.23836171627044678,
-        "peak_gb": 0.381188096,
-        "hours_per_run": 0.8082448529203733
-      },
-      "total_hours": 980.61044611305
+  "arms": {
+    "real": {
+      "micro": 4,
+      "sec_per_step": 6.672963619232178,
+      "peak_gb": 0.798938112,
+      "hours_per_run": 22.62690747221311
     },
-    "(2, 3)": {
-      "real": {
-        "micro": 4,
-        "sec_per_step": 8.156007647514343,
-        "peak_gb": 0.970808832,
-        "hours_per_run": 27.65566259811322
-      },
-      "dense": {
-        "micro": 4,
-        "sec_per_step": 0.21686458587646484,
-        "peak_gb": 0.355506176,
-        "hours_per_run": 0.7353516666094462
-      },
-      "total_hours": 334.07400617718696
+    "dense": {
+      "micro": 4,
+      "sec_per_step": 4.595433235168457,
+      "peak_gb": 0.341054464,
+      "hours_per_run": 15.582348194917044
     }
   },
-  "budget_hours": 150.0,
-  "chosen_layout": null
+  "total_hours": 318.2699342513084,
+  "budget_hours": 1.0,
+  "fits": false
 }
