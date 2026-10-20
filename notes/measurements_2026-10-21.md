@@ -15,6 +15,21 @@ Region: `data/mb_alpn_783.npz` (6,293 neurons, 570,682 edges). Input: dense 6,29
 
 Conditions: llama-server held 384 MB of the GPU. A game (The Detective Servant, 2.6 GB of the GPU) started within about a minute after this run. A second benchmark (pre-sorted COO, masked-dense) failed with out-of-memory because of that game and produced no numbers. Treat 164.6 ms as one uncontended measurement, not a settled figure.
 
+## Speed test on the RTX 3050 Laptop (results/speed.json), 10:36
+
+Settings: steps 4, batch 64 x 256 tokens, micro 4, PyTorch capped at 75% of GPU memory, EmbeddingGemma 2 stopped for the test, 2 warm-up + 2 timed steps. No panel-link errors in the kernel log during the run.
+
+| Layout | Arm | s/step | Peak GB | Hours per run |
+|---|---|---|---|---|
+| all 6 layers | real | 24.0 | 2.17 | 81.5 |
+| all 6 layers | dense | 0.24 | 0.38 | 0.81 |
+| layers 2, 3 | real | 8.2 | 0.97 | 27.7 |
+| layers 2, 3 | dense | 0.22 | 0.36 | 0.74 |
+
+Projected totals (12 connectome runs + 3 dense): 980.6 h (all 6 layers), 334.1 h (layers 2, 3). Neither fits the 150 h local budget, so the rule chose no layout (exit 3).
+
+These are cool-GPU numbers and probably optimistic. The 20-step smoke run (layers 2, 3, micro 4, same code) slowed from 11.6 s to 16.3 s per step over its first steps and had a median of 23.6 s, about 3x the 8.2 s here. Likely thermal or power throttling under sustained load, not measured directly.
+
 ## CORRECTION: first-step active edges, three block designs
 
 The `active-at-init` column in the next section is wrong. It combined "pre lit after S−2 hops" with "post reaches a readout in S−2 hops", conditions from different passes. The correct test for pass j (1 … S−1) is: pre lit after j−1 hops AND post's effect reaches the output. Recomputed (same draws as below):
