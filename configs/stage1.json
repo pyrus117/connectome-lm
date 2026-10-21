@@ -1,0 +1,19 @@
+{
+  "model": {
+    "vocab": 8192,
+    "ctx": 256,
+    "d_model": 256,
+    "n_layer": 6,
+    "n_head": 4,
+    "leak": 0.5,
+    "k_io": 256,
+    "norm": true
+  },
+  "train": {
+    "micro": 64
+  },
+  "provenance": {
+    "reach.json": "3c8e111f9457c7197b5ee12ded27581e7ae487c3aa628fcb6fb4f64becde341c",
+    "speed.json": "94c7bfdae8490d2aac0bc5d6f29cbc9d708e7db5b9e358f0404209a46f15c332"
+  }
+}

@@ -1,24 +1,29 @@
 {
-  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "gpu": "NVIDIA GeForce RTX 3090",
   "micros_tried": [
-    4
+    64,
+    32,
+    16,
+    8,
+    4,
+    2
   ],
-  "mem_fraction": 0.75,
+  "mem_fraction": 1.0,
   "arms": {
     "real": {
-      "micro": 4,
-      "sec_per_step": 6.672963619232178,
-      "peak_gb": 0.798938112,
-      "hours_per_run": 22.62690747221311
+      "micro": 64,
+      "sec_per_step": 1.584603726863861,
+      "peak_gb": 10.215518208,
+      "hours_per_run": 5.373127137174209
     },
     "dense": {
-      "micro": 4,
-      "sec_per_step": 4.595433235168457,
-      "peak_gb": 0.341054464,
-      "hours_per_run": 15.582348194917044
+      "micro": 64,
+      "sec_per_step": 0.8847829103469849,
+      "peak_gb": 3.614652416,
+      "hours_per_run": 3.0001513851682344
     }
   },
-  "total_hours": 318.2699342513084,
-  "budget_hours": 1.0,
-  "fits": false
+  "total_hours": 73.47797980159521,
+  "budget_hours": 150.0,
+  "fits": true
 }
