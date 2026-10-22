@@ -2,6 +2,10 @@
 
 Read this first. Updated 2026-10-21 (end of the first build session). Branch `stage1`; no git remote.
 
+> **Status 2026-10-23: Stage 1 is finished.** All 15 runs completed on a rented 2x RTX 3090 (Vast, about US$23, 43 h; instance destroyed). Primary verdict **X_WORSE**: real − shuf = +0.0126, +0.0147, +0.0160 nats/token (`runs/analysis.json`). Secondary contrasts INCONCLUSIVE because er-1, real_randio-1 and dense-1 had finite gradient spikes (max grad norm 83, 38, 283); real-1 and shuf-1 were clean. Checkpoints and results for all 15 runs are in `runs/` (git-ignored, sha256-verified against the pod). Run log: `notes/live_run.md`. "Waiting on Nate" below is history.
+>
+> **Next: vocabulary-list pilot**, a brain-only memory task on `er-0`. Plan: `docs/superpowers/plans/2026-10-23-vocab-list-pilot.md`, not started. Agreed split: Haiku subagent for Task 1, Sonnet for Task 2, main session for Tasks 3–5 (GPU smoke run and pilot decisions).
+
 ## The question
 
 Does a transformer whose layers share one recurrent "brain" wired like the real *Drosophila* mushroom body (FlyWire v783: ALPN + KC + MBON + DAN + MBIN, 6,293 neurons, 570,682 synapses) reach lower validation loss than the same model with a **degree-preserving shuffle** of that wiring, at equal parameters, tokens, data order and initialisation?
