@@ -20,7 +20,7 @@
 - **Sequence format.** `[eot, cue1, ans1, cue2, ans2, ...]` with 64 pairs per sequence: 129 tokens, under the model's 256 context. The target at each cue position is its answer; every other target is `-100` (ignored).
 - **Measure.** Quiz accuracy: every cue asked exactly once, teacher-forced, in a fixed order; a hit means the model's top guess at the cue position is the answer. Chance is 1/N once the model knows the answer set. Also record steps to reach 50% and 90%.
 - Laptop GPU: RTX 3050, 4 GB. Run `nvidia-smi` before any GPU job; wait if a game or other job holds the GPU. Cap memory with `--mem-fraction 0.75` (the internal panel link failed once under a full-VRAM test). Jobs over 30 minutes go in `systemd-run --user` (the harness kills longer background jobs).
-- Known risk: `load_pretrained` rebuilds the wiring and checks it against the pretraining fingerprint. The pod used numpy 2.5.4; the laptop has 2.5.3. If the `er` wiring differs between versions, the check raises. Task 3 Step 4 covers what to do.
+- `load_pretrained` rebuilds the wiring and checks it against the pretraining fingerprint. The pod used numpy 2.5.4; the laptop has 2.5.3 (system site-packages). Checked 2026-10-23: the laptop rebuilds all 15 Stage 1 wirings with matching fingerprints, so no numpy change is needed. Task 3 Step 4 stays as a fallback.
 - Test command: `/home/nate/Projects/connectome-lm/.venv/bin/python -m pytest /home/nate/Projects/connectome-lm/tests -q` (114 pass before this plan).
 
 ## File structure
