@@ -1,0 +1,57 @@
+{
+  "er-0-n512-lr0.0003-s1500": {
+    "pairs": 512,
+    "chance": 0.001953125,
+    "start_acc": 0.0,
+    "final_acc": 1.0,
+    "steps_to_50": 200,
+    "steps_to_90": 250,
+    "lr": 0.0003,
+    "steps": 1500,
+    "sec_per_step": 0.215
+  },
+  "er-0-n512-lr0.001-s1500": {
+    "pairs": 512,
+    "chance": 0.001953125,
+    "start_acc": 0.0,
+    "final_acc": 1.0,
+    "steps_to_50": 100,
+    "steps_to_90": 150,
+    "lr": 0.001,
+    "steps": 1500,
+    "sec_per_step": 0.228
+  },
+  "er-0-n512-lr0.003-s1500": {
+    "pairs": 512,
+    "chance": 0.001953125,
+    "start_acc": 0.0,
+    "final_acc": 1.0,
+    "steps_to_50": 50,
+    "steps_to_90": 100,
+    "lr": 0.003,
+    "steps": 1500,
+    "sec_per_step": 0.231
+  },
+  "er-0-n128-lr0.0003-s1500": {
+    "pairs": 128,
+    "chance": 0.0078125,
+    "start_acc": 0.0,
+    "final_acc": 1.0,
+    "steps_to_50": 100,
+    "steps_to_90": 150,
+    "lr": 0.0003,
+    "steps": 1500,
+    "sec_per_step": 0.219
+  },
+  "er-0-n1536-lr0.0003-s1500": {
+    "pairs": 1536,
+    "chance": 0.0006510416666666666,
+    "start_acc": 0.0,
+    "final_acc": 1.0,
+    "steps_to_50": 400,
+    "steps_to_90": 600,
+    "lr": 0.0003,
+    "steps": 1500,
+    "sec_per_step": 0.23
+  }
+}
