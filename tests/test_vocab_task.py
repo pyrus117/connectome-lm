@@ -6,7 +6,8 @@ import pytest
 import torch
 from tokenizers import Tokenizer
 
-from clm.vocab_task import IGNORE, correct, make_pairs, quiz_batches, train_batch, word_pool
+from clm.vocab_task import (IGNORE, correct, make_lists, make_pairs, make_twin_pairs, quiz_batches,
+                            train_batch, word_pool)
 
 TOKENIZER = Path(__file__).resolve().parent.parent / "data" / "fineweb" / "tokenizer.json"
 EOT = 0
@@ -67,3 +68,27 @@ def test_correct_counts_top_guesses_at_cue_positions_only():
     logits[0, 3, 2] = 1.0     # wrong
     logits[0, 0, 9] = 1.0     # ignored position
     assert correct(logits, y) == 1
+
+
+def test_twins_are_the_most_alike_pairs_and_get_different_answers():
+    pool = np.arange(100, 110)
+    sim = np.eye(10)
+    sim[0, 1] = sim[1, 0] = 0.9      # the most alike pair
+    sim[2, 3] = sim[3, 2] = 0.8
+    sim[0, 2] = sim[2, 0] = 0.85     # 0 is taken by then, so 2 pairs with 3
+    c, a = make_twin_pairs(pool, sim, 4, seed=0)
+    assert c.tolist() == [100, 101, 102, 103]
+    assert len(set(a.tolist())) == 4 and not set(a.tolist()) & set(c.tolist())
+    assert np.array_equal(a, make_twin_pairs(pool, sim, 4, seed=0)[1])
+    with pytest.raises(ValueError):
+        make_twin_pairs(pool, sim, 3, seed=0)
+    with pytest.raises(ValueError):
+        make_twin_pairs(pool, sim, 6, seed=0)       # 6 cues + 6 answers > 10 words
+
+
+def test_sequential_lists_share_no_words():
+    lists = make_lists(np.arange(100, 400), k=4, m=32, seed=0)
+    assert len(lists) == 4
+    words = [w for c, a in lists for w in c.tolist() + a.tolist()]
+    assert len(words) == len(set(words)) == 4 * 32 * 2
+    assert all(len(c) == len(a) == 32 for c, a in lists)

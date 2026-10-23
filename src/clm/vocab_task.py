@@ -28,6 +28,35 @@ def make_pairs(pool, n, seed):
     return words[:n], words[n:]
 
 
+
+def make_twin_pairs(pool, sim, n, seed):
+    """n cues made of the n // 2 most alike word pairs (greedy, each word used
+    once), every cue with its own random answer. Twins sit side by side:
+    cues[2i] and cues[2i + 1] are a twin pair."""
+    if n % 2:
+        raise ValueError(f"twins need an even number of cues, not {n}")
+    s = np.array(sim, dtype=np.float64)
+    np.fill_diagonal(s, -np.inf)
+    iu = np.triu_indices(len(pool), 1)
+    used, cue_slots = np.zeros(len(pool), bool), []
+    for k in np.argsort(-s[iu], kind="stable"):
+        i, j = iu[0][k], iu[1][k]
+        if not (used[i] or used[j]):
+            used[i] = used[j] = True
+            cue_slots += [i, j]
+            if len(cue_slots) == n:
+                break
+    rest = pool[~used]
+    if len(cue_slots) < n or len(rest) < n:
+        raise ValueError(f"the pool of {len(pool)} words cannot give {n} twin cues and {n} answers")
+    return pool[cue_slots], np.random.default_rng(seed).permutation(rest)[:n]
+
+
+def make_lists(pool, k, m, seed):
+    """k lists of m (cue, answer) pairs; no word appears in two lists."""
+    cues, answers = make_pairs(pool, k * m, seed)
+    return [(cues[i * m:(i + 1) * m], answers[i * m:(i + 1) * m]) for i in range(k)]
+
 def _pack(cues, answers, idx, eot):
     """eot, then cue/answer for each index in idx. Targets are the answer at
     each cue position and IGNORE everywhere else."""

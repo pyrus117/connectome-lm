@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import torch
 
-from clm.finetune import FinetuneConfig, load_pretrained, run
+from clm.finetune import FinetuneConfig, load_pretrained, run, run_sequential
 from clm.model import ModelConfig, build_model
-from clm.vocab_task import make_pairs
+from clm.vocab_task import make_lists, make_pairs
 
 CPU = torch.device("cpu")
 MCFG = ModelConfig(vocab=64, ctx=16, d_model=16, n_layer=3, n_head=2, leak=0.5, k_io=8)
@@ -92,3 +92,20 @@ def test_load_pretrained_refuses_a_mismatched_or_unfinished_run(region, tmp_path
     d, cfg, _ = _fake_run(tmp_path, region, **kw)
     with pytest.raises(RuntimeError):
         load_pretrained(d, cfg, CPU)
+
+
+def test_sequential_records_every_list_after_every_phase(region, tmp_path):
+    model = build_model(MCFG, "er", 0, region)
+    before = {k: v.clone() for k, v in model.state_dict().items()}
+    lists = make_lists(POOL, k=3, m=8, seed=0)
+    s = run_sequential(model, lists, small_cfg(steps=10, quiz_every=5), tmp_path / "seq", CPU, eot=0)
+    assert len(s["acc_matrix"]) == 3 and all(len(row) == 3 for row in s["acc_matrix"])
+    m = s["acc_matrix"]
+    assert s["final_mean"] == pytest.approx(sum(m[2]) / 3)
+    assert s["backward_transfer"] == pytest.approx(((m[2][0] - m[0][0]) + (m[2][1] - m[1][1])) / 2)
+    log = [json.loads(l) for l in (tmp_path / "seq" / "log.jsonl").read_text().splitlines()]
+    assert len(log) == 1 + 30 and log[-1]["step"] == 30 and [r["phase"] for r in log[1:]] == [0] * 10 + [1] * 10 + [2] * 10
+    assert [r["step"] for r in log if "quiz" in r] == [0, 5, 10, 15, 20, 25, 30]
+    after = model.state_dict()
+    for k in before:
+        assert torch.equal(before[k], after[k]) != (k in TRAINABLE), k
