@@ -31,3 +31,24 @@ Headline metric: `final_acc` for twins, `final_mean` for sequential.
 4. If no setting is usable, report every number to Nate; do not change the tasks without him.
 
 Only er models are used. No real, shuf, real_randio or dense model is fine-tuned or read during this pilot.
+
+## Results (finished Sat 24 Oct 04:40 NZDT, laptop; no GPU or panel errors in the kernel log)
+
+| Setting | er-0 | er-2 | Mean | abs(diff) | Usable |
+|---|---|---|---|---|---|
+| twins, 1536 | 1.000 | 1.000 | 1.000 | 0.000 | no |
+| twins, 512 | 1.000 | 1.000 | 1.000 | 0.000 | no |
+| sequential 4 x 384, lr 3e-4, 300/list | 0.372 | 0.361 | 0.367 | 0.011 | yes |
+| sequential 4 x 384, lr 1e-3, 300/list | 0.347 | 0.364 | 0.355 | 0.017 | yes |
+| sequential 4 x 384, lr 3e-4, 600/list | 0.359 | 0.363 | 0.361 | 0.003 | yes |
+| sequential 4 x 384, lr 1e-3, 600/list | 0.342 | 0.357 | 0.349 | 0.015 | yes |
+| sequential 8 x 192, lr 1e-3, 300/list | 0.209 | 0.206 | 0.208 | 0.003 | no |
+
+Twins learned almost as fast as random pairs (1536 cues, er-0 quiz accuracy at step 400: 0.48 twins vs 0.53 random; 90% at step 650 vs 600). Look-alike cues by text statistics are not much harder for this model.
+
+Sequential lists forget heavily. er-0, 4 x 384, lr 3e-4, 300/list, accuracy matrix (row = after phase, column = list):
+[1.00, 0, 0, 0], [0.32, 1.00, 0, 0], [0.06, 0.41, 1.00, 0], [0.03, 0.09, 0.37, 1.00]. Backward transfer −0.84 (er-0), −0.85 (er-2).
+
+**Choice by rule 2: sequential, 4 lists x 384 pairs, lr 3e-4, 300 steps per list** (mean 0.367, nearest 0.60 of the usable settings, and the shortest).
+
+Caveat for the 15-model pre-registration: the last list always ends at 1.00, so `final_mean` cannot fall below about 0.25 here; its informative part is how much of lists 1–3 survives. Seed-to-seed difference on er was 0.003–0.017.
