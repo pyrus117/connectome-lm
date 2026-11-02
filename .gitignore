@@ -4,6 +4,7 @@ data/raw/
 data/fineweb/*.bin
 data/fineweb/*_ids.txt
 runs/
+runs2/
 *.egg-info/
 .claude/
 data/fineweb/pool_sim.npz

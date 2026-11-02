@@ -52,6 +52,25 @@ MUTANTS = [
      "tests/test_train.py::test_completed_run_reports_what_the_analysis_checks"),
     ("M16", "src/clm/block.py", "h = self.leak * F.gelu(drive)", "h = F.gelu(drive)",
      "tests/test_brain.py::test_brain_matches_the_dense_reference_layer_by_layer"),
+    # Stage 2 baseline (src/clm/s2model.py, src/clm/s2train.py)
+    ("M17", "src/clm/s2model.py", "is_causal=True", "is_causal=False",
+     "tests/test_s2.py::test_logits_at_a_position_ignore_later_tokens"),
+    ("M18", "src/clm/s2model.py", 'if name.endswith(_ZERO_INIT) or name.endswith("ve_gate"):',
+     'if name.endswith("ve_gate"):', "tests/test_s2.py::test_fresh_model_predicts_uniformly"),
+    ("M19", "src/clm/s2model.py", "logits = self.cfg.softcap * torch.tanh(logits / self.cfg.softcap)",
+     "logits = logits", "tests/test_s2.py::test_softcap_bounds_the_logits"),
+    ("M20", "src/clm/s2model.py", "return torch.cat((a * c - b * s, a * s + b * c), dim=-1)", "return x",
+     "tests/test_s2.py::test_rotary_makes_attention_scores_depend_on_offset_only"),
+    ("M21", "src/clm/s2model.py", '(matrices if name.startswith("blocks.") and p.dim() == 2 else rest)',
+     "(matrices if p.dim() == 2 else rest)",
+     "tests/test_s2.py::test_muon_gets_only_block_matrices_and_every_parameter_is_optimised_once"),
+    ("M22", "src/clm/s2model.py", "g = torch.Generator().manual_seed(_seed_for(seed, name))", "g = None",
+     "tests/test_s2.py::test_same_seed_same_start_different_seed_different_start"),
+    ("M23", "src/clm/s2train.py", "return cfg.lr * max(0.0, (steps - 1 - step) / max(1, steps - 1 - cfg.warmup))",
+     "return cfg.lr", "tests/test_s2.py::test_lr_warms_up_then_falls_linearly_to_zero"),
+    ("M24", "src/clm/s2train.py", 'start, train_seconds = state["step"], state["train_seconds"]',
+     'start, train_seconds = 0, state["train_seconds"]',
+     "tests/test_s2.py::test_interrupted_and_resumed_run_ends_bit_identical"),
 ]
 
 
