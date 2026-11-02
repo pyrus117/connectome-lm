@@ -18,6 +18,7 @@ import torch
 
 from clm.countread import CountReader, Prefetcher, make_step
 from clm.data import eval_windows, get_batch, open_tokens
+from clm.s2loop import build_loop, sample_depth
 from clm.s2model import B0Config, build_b0, param_groups
 from clm.train import ROOT, _autocast, _git, _sha256, _write
 
@@ -44,6 +45,8 @@ class S2TrainConfig:
     count_k: int = 8              # continuations read per history
     loo: bool = True              # leave-one-out reads while training (validation never needs it)
     prereg: str = "PREREG_stage2_0.md"
+    arch: str = "b0"              # "b0", or "loop" (Stage 2D: B0's blocks as prelude, shared loop, coda)
+    loop_max: int = 6             # deepest pass count of the looped arch
 
 
 def lr_at(step, steps, cfg):
@@ -61,7 +64,7 @@ def load_config(path, size):
 
 
 @torch.no_grad()
-def evaluate(model, val, ctx, n_eval, micro, device, reader=None):
+def evaluate(model, val, ctx, n_eval, micro, device, reader=None, depth=None):
     model.eval()
     starts = eval_windows(len(val), ctx, n_eval)
     total = 0.0
@@ -72,6 +75,8 @@ def evaluate(model, val, ctx, n_eval, micro, device, reader=None):
         if reader is not None:
             tok, score = reader.lookup(x.numpy())
             kw["count"] = (torch.from_numpy(tok).to(device), torch.from_numpy(score).to(device))
+        if depth is not None:
+            kw["depth"] = depth
         x, y = x.to(device), y.to(device)
         with _autocast(device):
             _, loss = model(x, y, **kw)
@@ -85,8 +90,13 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     out.mkdir(parents=True, exist_ok=True)
     if tcfg.memory not in ("none", "count"):
         raise ValueError(f"unknown memory {tcfg.memory!r}")
+    if tcfg.arch not in ("b0", "loop"):
+        raise ValueError(f"unknown arch {tcfg.arch!r}")
+    if tcfg.arch == "loop" and tcfg.memory != "none":
+        raise ValueError("the looped arch has no memory arm")
+    looped = tcfg.arch == "loop"
     reader = CountReader(ROOT / tcfg.count_dir, tcfg.count_k) if tcfg.memory == "count" else None
-    model = build_b0(mcfg, seed).to(device)
+    model = (build_loop(mcfg, seed, tcfg.loop_max) if looped else build_b0(mcfg, seed)).to(device)
     opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd)
     steps = tcfg.tokens // (tcfg.batch * mcfg.ctx)
     if tcfg.batch % tcfg.micro:
@@ -104,7 +114,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     accum, end = tcfg.batch // tcfg.micro, steps if max_steps is None else min(steps, max_steps)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
-    val_loss, lookup_seconds = None, []
+    val_loss, lookup_seconds, by_depth = None, [], None
     prefetch = Prefetcher(lambda s: make_step(train, mcfg.ctx, tcfg.batch, seed, s, reader, tcfg.loo), end)
     with open(out / "log.jsonl", "a") as log:
         for step in range(start, end):
@@ -118,7 +128,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             data = prefetch.get(step)
             if data.step != step:
                 raise RuntimeError(f"prefetch handed over step {data.step} for step {step}")
-            loss_sum = 0.0
+            loss_sum, depths = 0.0, []
             for k in range(accum):
                 sl = slice(k * tcfg.micro, (k + 1) * tcfg.micro)
                 x, y = torch.from_numpy(data.x[sl]).to(device), torch.from_numpy(data.y[sl]).to(device)
@@ -126,6 +136,9 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
                 if reader is not None:
                     kw["count"] = (torch.from_numpy(data.tok[sl]).to(device),
                                    torch.from_numpy(data.score[sl]).to(device))
+                if looped:
+                    kw["depth"] = sample_depth(seed, step, k, tcfg.loop_max)
+                    depths.append(kw["depth"])
                 with _autocast(device):
                     _, loss = model(x, y, **kw)
                 (loss / accum).backward()
@@ -143,12 +156,20 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             dt = time.time() - t0
             train_seconds += dt
             rec = {"step": step, "loss": loss_sum, "lr": lr, "grad_norm": gnorm, "seconds": round(dt, 4)}
+            if looped:
+                rec["depths"] = depths
             if reader is not None:
                 rec["lookup_seconds"] = round(data.lookup_seconds, 4)
                 lookup_seconds.append(data.lookup_seconds)
             if (step + 1) % tcfg.eval_every == 0 or step + 1 == steps:
-                val_loss = rec["val_loss"] = evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro,
-                                                      device, reader)
+                if looped:                                # headline: the deepest readout
+                    by_depth = [evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro, device, depth=r)
+                                for r in range(1, tcfg.loop_max + 1)]
+                    rec["val_loss_by_depth"], val_loss = by_depth, by_depth[-1]
+                    rec["val_loss"] = val_loss
+                else:
+                    val_loss = rec["val_loss"] = evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro,
+                                                          device, reader)
             log.write(json.dumps(rec) + "\n")
             log.flush()
             if (step + 1) % tcfg.ckpt_every == 0 or step + 1 == end:
@@ -160,7 +181,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     if end < steps:
         return
     commit, dirty = _git()
-    arm = "b0" if reader is None else "count" if tcfg.loo else "count_noloo"
+    arm = "loop" if looped else "b0" if reader is None else "count" if tcfg.loo else "count_noloo"
     _write(out / "results.json", {
         "status": "complete", "arm": arm, "size": size, "seed": seed,
         "model": dataclasses.asdict(mcfg), "train": dataclasses.asdict(tcfg),
@@ -168,6 +189,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         "params_total": sum(p.numel() for p in model.parameters()),
         "tokens_seen": steps * tcfg.batch * mcfg.ctx, "steps": steps,
         "final_val_loss": val_loss, "train_seconds": round(train_seconds, 3),
+        "val_loss_by_depth": by_depth,
         "peak_vram_mib": round(torch.cuda.max_memory_allocated(device) / 2**20) if device.type == "cuda" else None,
         "lookup_seconds_mean": round(sum(lookup_seconds) / len(lookup_seconds), 4) if lookup_seconds else None,
         "host_rss_peak_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
@@ -188,12 +210,13 @@ def main():
     ap.add_argument("--lr", type=float, help="pilot override")
     ap.add_argument("--tokens", type=int, help="pilot override")
     ap.add_argument("--memory", choices=("none", "count"), help="arm override")
+    ap.add_argument("--arch", choices=("b0", "loop"), help="architecture override")
     ap.add_argument("--no-loo", action="store_true", help="leakage diagnostic: no leave-one-out while training")
     ap.add_argument("--prereg", help="pre-registration file whose hash the results record")
     args = ap.parse_args()
     mcfg, tcfg = load_config(args.config, args.size)
     overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("tokens", args.tokens),
-                                   ("memory", args.memory), ("prereg", args.prereg),
+                                   ("memory", args.memory), ("prereg", args.prereg), ("arch", args.arch),
                                    ("loo", False if args.no_loo else None)) if v is not None}
     tcfg = dataclasses.replace(tcfg, **overrides)
     device = torch.device(args.device)

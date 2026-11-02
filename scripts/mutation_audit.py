@@ -137,6 +137,28 @@ MUTANTS = [
      "tests/test_countread.py::test_buckets_split_at_1_10_100_and_1000_and_skip_short_windows"),
     ("M52", "src/clm/countread.py", "out[bi, ti] = table.hcount[row]", "out[bi, ti] = 1",
      "tests/test_countread.py::test_history_counts_report_the_stored_count_zero_for_unstored_and_minus_one_for_short_windows"),
+    # Stage 2D looped model and depth law (src/clm/s2loop.py, depth_law.py, depth_eval.py, s2train.py)
+    ("M53", "src/clm/s2loop.py", "            for _ in range(depth):\n", "            for _ in range(1):\n",
+     "tests/test_s2loop.py::test_depth_one_is_the_b0_forward_and_depth_r_runs_the_loop_r_times"),
+    ("M54", "src/clm/s2loop.py", "x = torch.where((depth >= i).unsqueeze(-1), self._loop(x), x)",
+     "x = torch.where((depth >= i).unsqueeze(-1), self._loop(x), self._loop(x))",
+     "tests/test_s2loop.py::test_an_exited_token_keeps_its_state_and_later_tokens_read_it_frozen"),
+    ("M55", "src/clm/s2loop.py", "np.random.default_rng([_seed_for(seed, \"loop-depth\") % 2**31, step, micro_index])",
+     "np.random.default_rng([_seed_for(seed, \"loop-depth\") % 2**31, 0, micro_index])",
+     "tests/test_s2loop.py::test_sampled_depths_cover_the_range_and_depend_only_on_seed_step_and_micro"),
+    ("M56", "src/clm/s2loop.py", "/ new.float().norm(dim=-1).clamp_min(1e-12))", "/ x.float().norm(dim=-1).clamp_min(1e-12))",
+     "tests/test_s2loop.py::test_all_depths_match_separate_forwards_and_report_the_state_change"),
+    ("M57", "src/clm/depth_law.py", "return cost.argmin(axis=0) + 1", "return cost.argmin(axis=0)",
+     "tests/test_depth_law.py::test_oracle_picks_the_depth_minimising_loss_plus_price_times_depth"),
+    ("M58", "src/clm/depth_law.py", "((y - (a + s * x)) ** 2).sum() / ss_tot", "((y - (a + s * x))).sum() / ss_tot",
+     "tests/test_depth_law.py::test_affine_fit_recovers_a_line_and_scores_noise_low"),
+    ("M59", "src/clm/depth_law.py", "lo <= r[\"mean_depth\"] <= max_depth - margin", "lo <= r[\"mean_depth\"] <= max_depth",
+     "tests/test_depth_law.py::test_flat_marginal_gains_do_not_give_one"),
+    ("M60", "src/clm/depth_eval.py", "return first + 1", "return first",
+     "tests/test_depth_eval.py::test_free_exit_stops_at_the_first_pass_below_the_threshold_or_runs_to_the_end"),
+    ("M61", "src/clm/s2train.py", "kw[\"depth\"] = sample_depth(seed, step, k, tcfg.loop_max)",
+     "kw[\"depth\"] = sample_depth(seed, 0, k, tcfg.loop_max)",
+     "tests/test_s2loop.py::test_loop_run_reports_the_loss_at_every_depth"),
 ]
 
 
