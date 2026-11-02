@@ -5,6 +5,8 @@ Read this first. Updated 2026-10-21 (end of the first build session). Branch `st
 > **Status 2026-10-23: Stage 1 is finished.** All 15 runs completed on a rented 2x RTX 3090 (Vast, about US$23, 43 h; instance destroyed). Primary verdict **X_WORSE**: real − shuf = +0.0126, +0.0147, +0.0160 nats/token (`runs/analysis.json`). Secondary contrasts INCONCLUSIVE because er-1, real_randio-1 and dense-1 had finite gradient spikes (max grad norm 83, 38, 283); real-1 and shuf-1 were clean. Checkpoints and results for all 15 runs are in `runs/` (git-ignored, sha256-verified against the pod). Run log: `notes/live_run.md`. "Waiting on Nate" below is history.
 >
 > **Next: vocabulary-list pilot**, a brain-only memory task on `er-0`. Plan: `docs/superpowers/plans/2026-10-23-vocab-list-pilot.md`, not started. Agreed split: Haiku subagent for Task 1, Sonnet for Task 2, main session for Tasks 3–5 (GPU smoke run and pilot decisions).
+>
+> **Status 2026-11-02: Stage 2 is a proposal, nothing built or run.** The vocabulary-list pilots finished (`notes/pilot_vocab.md`, `notes/pilot_vocab2_rules.md`). Plan: `docs/superpowers/plans/2026-11-02-stage2-kenyon-memory.md`, a counted host-RAM n-gram memory (COUNT) with a fly-hash similarity backoff for unseen histories, plus cheap tests of Litwin-Kumar's dimension theory and DeepSeek's effort law. It waits on Nate's answers in its §14, except Stage 2T (no training). Measurements behind it: `notes/laptop_throughput_2026-11-02.md`, `notes/ngram_stats_2026-11-02.md`, `notes/lacuna_check_2026-11-02.md`. Literature: neural vault, `research-logs/2026-11-02 *`.
 
 ## The question
 
