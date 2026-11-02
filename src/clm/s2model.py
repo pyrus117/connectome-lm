@@ -86,12 +86,19 @@ class B0GPT(nn.Module):
         self.register_buffer("cos", cos, persistent=False)
         self.register_buffer("sin", sin, persistent=False)
 
-    def forward(self, idx, targets=None, extra=None):
-        """extra: an optional (batch, time, d_model) input added to the embedding
-        (the Stage 2 memory arms use it)."""
+    def forward(self, idx, targets=None, extra=None, count=None):
+        """extra: an optional (batch, time, d_model) input added to the embedding.
+        count: COUNT's (tokens, scores), both (batch, time, slots), from
+        clm.countread; the embedding gets the scores' weighted sum of rows of
+        the untied head (Magnusson et al. 2026, Eq. 1), gradients included."""
         x = self.embed(idx)
         if extra is not None:
             x = x + extra
+        if count is not None:
+            tok, score = count
+            b, t, s = tok.shape
+            x = x + F.embedding_bag(tok.reshape(b * t, s), self.head.weight,
+                                    per_sample_weights=score.reshape(b * t, s), mode="sum").view(b, t, -1)
         x = rms(x)
         ves = {layer: emb(idx) for layer, emb in zip(self.ve_layers, self.value_embed)}
         for i, blk in enumerate(self.blocks):

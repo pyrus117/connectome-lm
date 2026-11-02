@@ -1,0 +1,168 @@
+"""COUNT read (Magnusson, Smith & Koh 2026, arXiv 2610.20456, Eq. 1-2) over the
+tables built by clm.counts.
+
+For every position the reader returns, per order, the first `k_top` stored
+continuations of that order's history with their count ratios C(h,w)/C(h).
+Scores carry Eq. 1's 1/J, so the model forms f_t = sum_j sum_k S(w_k|h_j) B[w_k]
+/ J with one weighted sum over the head rows B (B0GPT.forward, `count`) and adds
+f_t to the token embedding.
+
+Choices fixed here, all stated in PREREG_stage2a.md:
+- One slot per table order; a history that is not stored (count below c_min,
+  never seen, or holding an end-of-text id) leaves its slot empty. The
+  average keeps the constant 1/J of Eq. 1.
+- A history uses only tokens inside the model's window, so the first k-1
+  positions of a window have no order-k slot.
+- Eq. 2's 0.4 back-off applies to an unobserved continuation; a stored top-K
+  continuation is always observed, so scores are plain count ratios.
+- Leave-one-out (training only, `y` given): the position's own occurrence is
+  subtracted from C(h,w) and C(h); a history left under c_min is dropped.
+  The count corpus starts with the training stream, so the occurrence is
+  there exactly once. The first k_top continuations are taken before the
+  subtraction and are not re-ranked after it.
+"""
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from clm import counts as C
+
+
+BUCKET_EDGES = (1, 10, 100, 1000)
+BUCKET_LABELS = ("not stored", "1-9", "10-99", "100-999", ">=1000")
+
+
+def bucket_of(history_counts):
+    """Bucket index 0..4 of each stored-history count (see BUCKET_LABELS); positions
+    whose window is too short (count -1) get -1. Orders 4 and 5 store no history
+    seen once, so their bucket 0 also holds the seen-once histories."""
+    return np.where(history_counts < 0, -1, np.digitize(history_counts, BUCKET_EDGES))
+
+
+def find_rows(table, x):
+    """Positions whose history of table.k tokens, taken inside the window, is stored.
+    Returns batch index, time index and row of each. A history holding the
+    end-of-text id is never stored, so it is never found."""
+    last = np.arange(table.k - 1, x.shape[1])
+    key = np.zeros((x.shape[0], last.size), dtype=np.uint64)
+    for j in range(table.k):
+        key = (key << np.uint64(C.VOCAB_BITS)) | x[:, last - (table.k - 1) + j].astype(np.uint64)
+    row = np.searchsorted(table.keys, key)
+    hit = table.keys[np.minimum(row, table.keys.size - 1)] == key
+    bi, pi = np.nonzero(hit)
+    return bi, last[pi], row[bi, pi]
+
+
+class CountReader:
+    def __init__(self, directory, k_top=8):
+        found = sorted(Path(directory).glob("order*"))
+        if not found:
+            raise FileNotFoundError(f"no order* tables in {directory}")
+        loaded = [C.load(d) for d in found]
+        loaded.sort(key=lambda tm: tm[0].k)
+        self.tables = [t for t, _ in loaded]
+        self.c_min = [m["c_min"] for _, m in loaded]
+        eots = {m["eot_id"] for _, m in loaded}
+        if len(eots) != 1:
+            raise ValueError(f"tables disagree on the end-of-text id: {eots}")
+        self.eot = eots.pop()
+        if not 1 <= k_top <= C.TOP:
+            raise ValueError(f"k_top {k_top} outside 1..{C.TOP}")
+        self.k_top = k_top
+        self.slots = len(self.tables) * k_top
+
+    def lookup(self, x, y=None):
+        """x, y: integer arrays (batch, time). Returns tokens int64 and scores
+        float32, both (batch, time, slots); unused slots hold token 0, score 0.
+        Scores are count ratios divided by the number of orders J.
+        With `y` (the next token at each position) the position's own
+        occurrence is left out of the counts."""
+        x = np.asarray(x)
+        b, t = x.shape
+        tok = np.zeros((b, t, self.slots), dtype=np.int64)
+        score = np.zeros((b, t, self.slots), dtype=np.float32)
+        kk = self.k_top
+        for o, (table, c_min) in enumerate(zip(self.tables, self.c_min)):
+            k = table.k
+            if t < k:
+                continue
+            bi, ti, row = find_rows(table, x)
+            lo = table.offsets[row].astype(np.int64)
+            n = np.minimum(table.offsets[row + 1].astype(np.int64) - lo, kk)
+            live = np.arange(kk) < n[:, None]
+            at = np.where(live, lo[:, None] + np.arange(kk), 0)
+            etok, ecnt = table.tok[at].astype(np.int64), table.cnt[at].astype(np.int64)
+            hc = table.hcount[row].astype(np.int64)
+            keep = np.ones(hc.size, dtype=bool)
+            if y is not None:
+                ecnt = ecnt - (live & (etok == np.asarray(y)[bi, ti][:, None]))
+                hc = hc - 1
+                keep = hc >= c_min
+            ok = live & keep[:, None]
+            sl = slice(o * kk, (o + 1) * kk)
+            tok[bi, ti, sl] = np.where(ok, etok, 0)
+            score[bi, ti, sl] = np.where(ok, ecnt / np.maximum(hc, 1)[:, None], 0.0) / len(self.tables)
+        return tok, score
+
+
+    def history_counts(self, x, k):
+        """C(h) of the stored k-token history ending at each position; 0 where it is
+        not stored (never seen, under c_min, or holding an end-of-text id) and -1
+        where the window is too short to hold k tokens."""
+        x = np.asarray(x)
+        table = next(t for t in self.tables if t.k == k)
+        out = np.full(x.shape, -1, dtype=np.int64)
+        out[:, k - 1:] = 0
+        bi, ti, row = find_rows(table, x)
+        out[bi, ti] = table.hcount[row]
+        return out
+
+
+@dataclass
+class StepData:
+    step: int
+    x: np.ndarray
+    y: np.ndarray
+    tok: np.ndarray | None
+    score: np.ndarray | None
+    lookup_seconds: float
+
+
+def make_step(train, ctx, batch, seed, step, reader, loo):
+    """Inputs, targets and COUNT scores of one optimizer step. Depends only on
+    (seed, step), so a resumed run reads exactly what an unbroken run would."""
+    from clm.data import batch_starts
+    starts = batch_starts(len(train), ctx, batch, seed, step)
+    x = np.stack([train[s:s + ctx] for s in starts]).astype(np.int64)
+    y = np.stack([train[s + 1:s + ctx + 1] for s in starts]).astype(np.int64)
+    if reader is None:
+        return StepData(step, x, y, None, None, 0.0)
+    t0 = time.perf_counter()
+    tok, score = reader.lookup(x, y if loo else None)
+    return StepData(step, x, y, tok, score, time.perf_counter() - t0)
+
+
+class Prefetcher:
+    """Builds step s + 1 on a worker thread while step s trains."""
+
+    def __init__(self, make, end):
+        self.make, self.end = make, end
+        self.pool = ThreadPoolExecutor(max_workers=1)
+        self.pending = None
+        self.hits = 0
+
+    def get(self, step):
+        if self.pending is not None and self.pending[0] == step:
+            data = self.pending[1].result()
+            self.hits += 1
+        else:
+            data = self.make(step)
+        nxt = step + 1
+        self.pending = (nxt, self.pool.submit(self.make, nxt)) if nxt < self.end else None
+        return data
+
+    def close(self):
+        self.pool.shutdown(wait=True, cancel_futures=True)

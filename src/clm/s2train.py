@@ -10,12 +10,14 @@ import argparse
 import dataclasses
 import json
 import math
+import resource
 import time
 from pathlib import Path
 
 import torch
 
-from clm.data import batch_starts, eval_windows, get_batch, open_tokens
+from clm.countread import CountReader, Prefetcher, make_step
+from clm.data import eval_windows, get_batch, open_tokens
 from clm.s2model import B0Config, build_b0, param_groups
 from clm.train import ROOT, _autocast, _git, _sha256, _write
 
@@ -37,6 +39,11 @@ class S2TrainConfig:
     eval_every: int = 2000
     eval_tokens: int = 2_097_152
     ckpt_every: int = 500
+    memory: str = "none"          # "none" (B0) or "count" (COUNT read over count_dir)
+    count_dir: str = "data/count"
+    count_k: int = 8              # continuations read per history
+    loo: bool = True              # leave-one-out reads while training (validation never needs it)
+    prereg: str = "PREREG_stage2_0.md"
 
 
 def lr_at(step, steps, cfg):
@@ -54,14 +61,20 @@ def load_config(path, size):
 
 
 @torch.no_grad()
-def evaluate(model, val, ctx, n_eval, micro, device):
+def evaluate(model, val, ctx, n_eval, micro, device, reader=None):
     model.eval()
     starts = eval_windows(len(val), ctx, n_eval)
     total = 0.0
+    cpu = torch.device("cpu")
     for i in range(0, len(starts), micro):
-        x, y = get_batch(val, starts[i:i + micro], ctx, device)
+        x, y = get_batch(val, starts[i:i + micro], ctx, cpu)
+        kw = {}
+        if reader is not None:
+            tok, score = reader.lookup(x.numpy())
+            kw["count"] = (torch.from_numpy(tok).to(device), torch.from_numpy(score).to(device))
+        x, y = x.to(device), y.to(device)
         with _autocast(device):
-            _, loss = model(x, y)
+            _, loss = model(x, y, **kw)
         total += loss.item() * len(x)
     model.train()
     return total / len(starts)
@@ -70,6 +83,9 @@ def evaluate(model, val, ctx, n_eval, micro, device):
 def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    if tcfg.memory not in ("none", "count"):
+        raise ValueError(f"unknown memory {tcfg.memory!r}")
+    reader = CountReader(ROOT / tcfg.count_dir, tcfg.count_k) if tcfg.memory == "count" else None
     model = build_b0(mcfg, seed).to(device)
     opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd)
     steps = tcfg.tokens // (tcfg.batch * mcfg.ctx)
@@ -88,7 +104,8 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     accum, end = tcfg.batch // tcfg.micro, steps if max_steps is None else min(steps, max_steps)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
-    val_loss = None
+    val_loss, lookup_seconds = None, []
+    prefetch = Prefetcher(lambda s: make_step(train, mcfg.ctx, tcfg.batch, seed, s, reader, tcfg.loo), end)
     with open(out / "log.jsonl", "a") as log:
         for step in range(start, end):
             if device.type == "cuda":
@@ -98,12 +115,19 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             for o in opts:
                 for g in o.param_groups:
                     g["lr"] = lr
-            starts = batch_starts(len(train), mcfg.ctx, tcfg.batch, seed, step)
+            data = prefetch.get(step)
+            if data.step != step:
+                raise RuntimeError(f"prefetch handed over step {data.step} for step {step}")
             loss_sum = 0.0
             for k in range(accum):
-                x, y = get_batch(train, starts[k * tcfg.micro:(k + 1) * tcfg.micro], mcfg.ctx, device)
+                sl = slice(k * tcfg.micro, (k + 1) * tcfg.micro)
+                x, y = torch.from_numpy(data.x[sl]).to(device), torch.from_numpy(data.y[sl]).to(device)
+                kw = {}
+                if reader is not None:
+                    kw["count"] = (torch.from_numpy(data.tok[sl]).to(device),
+                                   torch.from_numpy(data.score[sl]).to(device))
                 with _autocast(device):
-                    _, loss = model(x, y)
+                    _, loss = model(x, y, **kw)
                 (loss / accum).backward()
                 loss_sum += loss.item() / accum
             gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), tcfg.clip).item()
@@ -119,8 +143,12 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             dt = time.time() - t0
             train_seconds += dt
             rec = {"step": step, "loss": loss_sum, "lr": lr, "grad_norm": gnorm, "seconds": round(dt, 4)}
+            if reader is not None:
+                rec["lookup_seconds"] = round(data.lookup_seconds, 4)
+                lookup_seconds.append(data.lookup_seconds)
             if (step + 1) % tcfg.eval_every == 0 or step + 1 == steps:
-                val_loss = rec["val_loss"] = evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro, device)
+                val_loss = rec["val_loss"] = evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro,
+                                                      device, reader)
             log.write(json.dumps(rec) + "\n")
             log.flush()
             if (step + 1) % tcfg.ckpt_every == 0 or step + 1 == end:
@@ -128,18 +156,22 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
                             "model": model.state_dict(), "opts": [o.state_dict() for o in opts]},
                            out / "ckpt.tmp")
                 (out / "ckpt.tmp").replace(ckpt)
+    prefetch.close()
     if end < steps:
         return
     commit, dirty = _git()
+    arm = "b0" if reader is None else "count" if tcfg.loo else "count_noloo"
     _write(out / "results.json", {
-        "status": "complete", "arm": "b0", "size": size, "seed": seed,
+        "status": "complete", "arm": arm, "size": size, "seed": seed,
         "model": dataclasses.asdict(mcfg), "train": dataclasses.asdict(tcfg),
         "non_embedding_params": model.non_embedding_params(),
         "params_total": sum(p.numel() for p in model.parameters()),
         "tokens_seen": steps * tcfg.batch * mcfg.ctx, "steps": steps,
         "final_val_loss": val_loss, "train_seconds": round(train_seconds, 3),
         "peak_vram_mib": round(torch.cuda.max_memory_allocated(device) / 2**20) if device.type == "cuda" else None,
-        "config_sha256": _sha256(config_path), "prereg_sha256": _sha256(PREREG),
+        "lookup_seconds_mean": round(sum(lookup_seconds) / len(lookup_seconds), 4) if lookup_seconds else None,
+        "host_rss_peak_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
+        "config_sha256": _sha256(config_path), "prereg_sha256": _sha256(ROOT / tcfg.prereg),
         "git_commit": commit, "git_dirty": dirty,
         "device": torch.cuda.get_device_name(device) if device.type == "cuda" else "cpu"})
 
@@ -155,10 +187,14 @@ def main():
     ap.add_argument("--optimizer", help="pilot override")
     ap.add_argument("--lr", type=float, help="pilot override")
     ap.add_argument("--tokens", type=int, help="pilot override")
+    ap.add_argument("--memory", choices=("none", "count"), help="arm override")
+    ap.add_argument("--no-loo", action="store_true", help="leakage diagnostic: no leave-one-out while training")
+    ap.add_argument("--prereg", help="pre-registration file whose hash the results record")
     args = ap.parse_args()
     mcfg, tcfg = load_config(args.config, args.size)
-    overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("tokens", args.tokens))
-                 if v is not None}
+    overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("tokens", args.tokens),
+                                   ("memory", args.memory), ("prereg", args.prereg),
+                                   ("loo", False if args.no_loo else None)) if v is not None}
     tcfg = dataclasses.replace(tcfg, **overrides)
     device = torch.device(args.device)
     if device.type == "cuda":
