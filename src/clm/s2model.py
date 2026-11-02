@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim._muon import _adjust_lr, _zeropower_via_newtonschulz
 
 from clm.model import _seed_for
 
@@ -128,6 +129,39 @@ def build_b0(cfg, seed):
     return model
 
 
+class HeadMuon(torch.optim.Muon):
+    """Per-head Muon (Kimi K3, arXiv 2607.24653 §2.5): a parameter listed in `split`
+    is orthogonalised as split[id(p)] equal row blocks, each with its own lr scale.
+    With no split it matches torch.optim.Muon exactly (tested)."""
+
+    def __init__(self, params, split, **kw):
+        super().__init__(params, **kw)
+        self.split = split
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+        for g in self.param_groups:
+            for p in g["params"]:
+                if p.grad is None:
+                    continue
+                state = self.state[p]
+                if "momentum_buffer" not in state:
+                    state["momentum_buffer"] = torch.zeros_like(p.grad, memory_format=torch.preserve_format)
+                buf = state["momentum_buffer"]
+                buf.lerp_(p.grad, 1 - g["momentum"])
+                upd = p.grad.lerp(buf, g["momentum"]) if g["nesterov"] else buf
+                blocks = upd.view(self.split.get(id(p), 1), -1, upd.size(1))
+                upd = torch.cat([_zeropower_via_newtonschulz(b, g["ns_coefficients"], g["ns_steps"], g["eps"])
+                                 for b in blocks])
+                p.mul_(1 - g["lr"] * g["weight_decay"])
+                p.add_(upd, alpha=-_adjust_lr(g["lr"], g["adjust_lr_fn"], blocks.shape[1:]))
+        return loss
+
+
 def param_groups(model, optimizer, lr, wd):
     """Muon takes the 2-D block matrices; AdamW takes embeddings, head and gates.
     With AdamW alone, block matrices get weight decay and the rest none."""
@@ -140,5 +174,9 @@ def param_groups(model, optimizer, lr, wd):
                                   betas=(0.9, 0.95), fused=False)]
     if optimizer == "muon":
         return [torch.optim.Muon(matrices, lr=lr, weight_decay=wd, adjust_lr_fn="match_rms_adamw"),
+                torch.optim.AdamW([adam_rest], betas=(0.9, 0.95))]
+    if optimizer == "muon_head":              # q, k and v of every head as separate blocks
+        split = {id(b.qkv.weight): 3 * model.cfg.n_head for b in model.blocks}
+        return [HeadMuon(matrices, split, lr=lr, weight_decay=wd, adjust_lr_fn="match_rms_adamw"),
                 torch.optim.AdamW([adam_rest], betas=(0.9, 0.95))]
     raise ValueError(f"unknown optimizer {optimizer!r}")

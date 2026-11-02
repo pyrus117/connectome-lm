@@ -71,6 +71,11 @@ MUTANTS = [
     ("M24", "src/clm/s2train.py", 'start, train_seconds = state["step"], state["train_seconds"]',
      'start, train_seconds = 0, state["train_seconds"]',
      "tests/test_s2.py::test_interrupted_and_resumed_run_ends_bit_identical"),
+    ("M25", "src/clm/s2model.py", "blocks = upd.view(self.split.get(id(p), 1), -1, upd.size(1))",
+     "blocks = upd.view(1, -1, upd.size(1))",
+     "tests/test_s2.py::test_head_muon_orthogonalises_each_head_block_on_its_own"),
+    ("M26", "src/clm/s2model.py", 'g["adjust_lr_fn"], blocks.shape[1:])', 'g["adjust_lr_fn"], p.shape)',
+     "tests/test_s2.py::test_head_muon_orthogonalises_each_head_block_on_its_own"),
 ]
 
 

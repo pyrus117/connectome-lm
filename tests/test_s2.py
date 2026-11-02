@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import clm.s2train as S
-from clm.s2model import B0Config, apply_rotary, build_b0, param_groups, rotary
+from clm.s2model import B0Config, HeadMuon, apply_rotary, build_b0, param_groups, rotary
 from clm.s2train import S2TrainConfig, lr_at, run
 
 CPU = torch.device("cpu")
@@ -80,6 +80,63 @@ def test_muon_gets_only_block_matrices_and_every_parameter_is_optimised_once():
     assert decayed == in_muon
 
 
+def _muon_step(opt_cls, grad, **kw):
+    w = torch.nn.Parameter(torch.zeros_like(grad))
+    opt = opt_cls([w], lr=1e-2, weight_decay=0.0, adjust_lr_fn="match_rms_adamw", **kw)
+    w.grad = grad.clone()
+    opt.step()
+    return w.detach()
+
+
+def test_head_muon_without_split_matches_torch_muon_over_several_steps():
+    torch.manual_seed(0)
+    a, b = build_b0(TINY, 0), build_b0(TINY, 0)
+    x = torch.randint(0, 64, (2, 16))
+    oa = torch.optim.Muon([p for p in a.blocks.parameters() if p.dim() == 2], lr=1e-2,
+                          weight_decay=0.1, adjust_lr_fn="match_rms_adamw")
+    ob = HeadMuon([p for p in b.blocks.parameters() if p.dim() == 2], {}, lr=1e-2,
+                  weight_decay=0.1, adjust_lr_fn="match_rms_adamw")
+    for _ in range(3):
+        for m, o in ((a, oa), (b, ob)):
+            o.zero_grad()
+            m(x, x)[1].backward()
+            o.step()
+    for (n, p), q in zip(a.named_parameters(), b.parameters()):
+        assert torch.equal(p, q), n
+
+
+def test_head_muon_orthogonalises_each_head_block_on_its_own():
+    torch.manual_seed(0)
+    g = torch.randn(48, 16)                       # TINY qkv: 3 matrices x 2 heads x 8 rows
+    g2 = g.clone()
+    g2[:8] += 5 * torch.randn(8, 16)              # change only q of head 0
+    w =torch.nn.Parameter(torch.zeros(48, 16))
+    split = {id(w): 6}
+
+    def step(grad):
+        w.data.zero_()
+        opt = HeadMuon([w], split, lr=1e-2, weight_decay=0.0, adjust_lr_fn="match_rms_adamw")
+        w.grad = grad.clone()
+        opt.step()
+        return w.detach().clone()
+    u, u2 = step(g), step(g2)
+    assert torch.equal(u[8:], u2[8:]) and not torch.equal(u[:8], u2[:8])
+    f, f2 = _muon_step(torch.optim.Muon, g), _muon_step(torch.optim.Muon, g2)
+    assert not torch.allclose(f[8:], f2[8:])      # fused Muon mixes heads: the check can fail
+    for blk in u.view(6, 8, 16):                  # each block: 8 singular values near 1, lr scaled by its shape
+        s = torch.linalg.svdvals(blk.float() / (1e-2 * 0.2 * math.sqrt(16)))
+        assert s.min() > 0.5 and s.max() < 1.5
+
+
+def test_muon_head_splits_every_qkv_into_three_blocks_per_head():
+    m = build_b0(TINY, 0)
+    muon, adam = param_groups(m, "muon_head", 1e-3, 0.1)
+    assert isinstance(muon, HeadMuon)
+    assert muon.split == {id(b.qkv.weight): 3 * TINY.n_head for b in m.blocks}
+    plain, _ = param_groups(m, "muon", 1e-3, 0.1)
+    assert [id(p) for p in muon.param_groups[0]["params"]] == [id(p) for p in plain.param_groups[0]["params"]]
+
+
 def test_lr_warms_up_then_falls_linearly_to_zero():
     c = S2TrainConfig(lr=1e-3, warmup=10)
     assert lr_at(0, 100, c) == pytest.approx(1e-4)
@@ -104,7 +161,7 @@ def tiny(tmp_path):
     return TINY, tcfg, tmp_path
 
 
-@pytest.mark.parametrize("optimizer", ["adamw", "muon"])
+@pytest.mark.parametrize("optimizer", ["adamw", "muon", "muon_head"])
 def test_interrupted_and_resumed_run_ends_bit_identical(tiny, optimizer):
     mcfg, tcfg, tmp = tiny
     tcfg = S.dataclasses.replace(tcfg, optimizer=optimizer)
