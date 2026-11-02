@@ -12,7 +12,7 @@ V = 30                                   # tokens 0..28 plus EOT 29
 def build_lm(stream, tmp_path, c_min=(1, 1, 2, 2)):
     for k, c in zip(range(1, 5), c_min):
         C.save(C.build(stream, k, EOT, c, parts=2), tmp_path / f"order{k + 1}", {"c_min": c, "eot_id": EOT})
-    return NgramLM(CountReader(tmp_path), add_one_unigram(stream, V))
+    return NgramLM(CountReader(tmp_path).tables, add_one_unigram(stream, V))
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def test_a_stored_history_gives_discounted_ratios_and_a_new_one_gives_the_unigra
     d = tmp_path / "t"
     C.save(C.build(t, 1, EOT, 1, parts=1), d / "order2", {"c_min": 1, "eot_id": EOT})
     uni = add_one_unigram(t, V)
-    lm = NgramLM(CountReader(d), uni)
+    lm = NgramLM(CountReader(d).tables, uni)
     x = np.array([[1, 4]], dtype=np.int64)
     p = lm.prob(x, np.array([[[2, 3, 4], [0, 1, 4]]]))
     d = lm.d

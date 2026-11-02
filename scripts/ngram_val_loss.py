@@ -27,7 +27,7 @@ def main():
         sys.exit("count corpus does not match its manifest")
     val = open_tokens(ROOT / "data/fineweb/val.bin")
     reader = CountReader(ROOT / "data/count")
-    lm = NgramLM(reader, add_one_unigram(corpus, 8192))
+    lm = NgramLM(reader.tables, add_one_unigram(corpus, 8192))
     starts = eval_windows(len(val), CTX, N_EVAL)
     total, n = 0.0, 0
     by_bucket = {k: np.zeros((len(BUCKET_LABELS), 2)) for k in (3, 4)}

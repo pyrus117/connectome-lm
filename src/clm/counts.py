@@ -101,6 +101,19 @@ def _group(keys, conts):
     hist, inverse = np.unique(keys, return_inverse=True)
     pair = (inverse.astype(np.uint64) << np.uint64(VOCAB_BITS)) | conts.astype(np.uint64)
     pair, cnt = np.unique(pair, return_counts=True)
+    return _summarise(hist, pair, cnt)
+
+
+def group_weighted(keys, conts, weights):
+    """`_group` for entries that already carry counts: (key, continuation, weight) triples,
+    weights summed per (key, continuation). Used to pool histories into buckets."""
+    hist, inverse = np.unique(keys, return_inverse=True)
+    pair = (inverse.astype(np.uint64) << np.uint64(VOCAB_BITS)) | conts.astype(np.uint64)
+    pair, inverse2 = np.unique(pair, return_inverse=True)
+    return _summarise(hist, pair, np.bincount(inverse2, weights=weights).astype(np.int64))
+
+
+def _summarise(hist, pair, cnt):
     entry_hist = (pair >> np.uint64(VOCAB_BITS)).astype(np.int64)
     tok = (pair & _TOKEN_MASK).astype(np.uint16)
     starts = np.flatnonzero(np.r_[True, entry_hist[1:] != entry_hist[:-1]])
@@ -151,10 +164,16 @@ def pick_cmin(rows, entries, budget_bytes):
 
 
 def build(tokens, k, eot, c_min, parts=16, chunk=CHUNK):
+    return build_from_groups(_partitions(tokens, k, eot, parts, chunk), k, c_min)
+
+
+def build_from_groups(groups, k, c_min):
+    """A Table from grouped counts (the tuples `_group` returns), one per partition,
+    partitions in ascending key order."""
     if c_min < 1:
         raise ValueError("c_min must be at least 1")
     out = {name: [] for name in ("keys", "hcount", "lens", "tok", "cnt")}
-    for hist, hcount, fanout, entry_hist, tok, cnt in _partitions(tokens, k, eot, parts, chunk):
+    for hist, hcount, fanout, entry_hist, tok, cnt in groups:
         keep = hcount >= c_min
         if not keep.any():
             continue

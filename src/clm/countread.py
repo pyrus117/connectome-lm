@@ -42,14 +42,24 @@ def bucket_of(history_counts):
     return np.where(history_counts < 0, -1, np.digitize(history_counts, BUCKET_EDGES))
 
 
-def find_rows(table, x):
+def history_keys(x, k):
+    """Packed k-token histories ending at each time index in `last` (k-1 .. time-1), (batch, len(last))."""
+    last = np.arange(k - 1, x.shape[1])
+    key = np.zeros((x.shape[0], last.size), dtype=np.uint64)
+    for j in range(k):
+        key = (key << np.uint64(C.VOCAB_BITS)) | x[:, last - (k - 1) + j].astype(np.uint64)
+    return key, last
+
+
+def find_rows(table, x, keyfn=None):
     """Positions whose history of table.k tokens, taken inside the window, is stored.
     Returns batch index, time index and row of each. A history holding the
-    end-of-text id is never stored, so it is never found."""
-    last = np.arange(table.k - 1, x.shape[1])
-    key = np.zeros((x.shape[0], last.size), dtype=np.uint64)
-    for j in range(table.k):
-        key = (key << np.uint64(C.VOCAB_BITS)) | x[:, last - (table.k - 1) + j].astype(np.uint64)
+    end-of-text id is never stored, so it is never found. `keyfn(packed, tokens)`
+    maps each history to another key (a bucket id) before the lookup."""
+    key, last = history_keys(x, table.k)
+    if keyfn is not None:
+        toks = np.stack([x[:, last - (table.k - 1) + j] for j in range(table.k)], axis=-1)
+        key = keyfn(key.reshape(-1), toks.reshape(-1, table.k)).reshape(key.shape)
     row = np.searchsorted(table.keys, key)
     hit = table.keys[np.minimum(row, table.keys.size - 1)] == key
     bi, pi = np.nonzero(hit)

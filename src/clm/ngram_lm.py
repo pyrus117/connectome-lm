@@ -30,8 +30,11 @@ def add_one_unigram(tokens, vocab, chunk=1 << 26):
 
 
 class NgramLM:
-    def __init__(self, reader, unigram, discount=DISCOUNT):
-        self.tables, self.uni, self.d = reader.tables, unigram, discount
+    def __init__(self, tables, unigram, discount=DISCOUNT, keyfns=None):
+        """tables: count tables by ascending history length. keyfns: optional, one per table (None
+        for an exact table), each mapping packed histories and their tokens to the table's keys."""
+        self.tables, self.uni, self.d = tables, unigram, discount
+        self.keyfns = keyfns or [None] * len(tables)
 
     def prob(self, x, cand):
         """x: (batch, time) window tokens; cand: (batch, time, M) candidate next
@@ -39,9 +42,9 @@ class NgramLM:
         x = np.asarray(x)
         b, t = x.shape
         rows = []
-        for table in self.tables:
+        for table, keyfn in zip(self.tables, self.keyfns):
             r = np.full(b * t, -1, dtype=np.int64)
-            bi, ti, row = find_rows(table, x)
+            bi, ti, row = find_rows(table, x, keyfn)
             r[bi * t + ti] = row
             rows.append(r)
         return self._level(len(self.tables), cand.reshape(b * t, -1), rows).reshape(cand.shape)
