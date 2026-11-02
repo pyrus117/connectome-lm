@@ -10,3 +10,5 @@ notes/pod_stage1/
 *.egg-info/
 .claude/
 data/fineweb/pool_sim.npz
+data/count/
+data/fineweb/count_corpus.part

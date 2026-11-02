@@ -1,0 +1,11 @@
+{
+  "tokens": 881048239,
+  "docs": 718756,
+  "skipped_docs_with_eot": 0,
+  "eot_id": 0,
+  "sha256": "11bd9c1f6232263b2b27f3d2588c8e487f8249aa47d0199ffc08713ecaa8c07f",
+  "tokenizer_sha256": "6c93afdcbcb776d890f8460607cc0739f7206b7d4b7e048e4d638ed5eec1cc46",
+  "shard_sha256": "b1ba7b2ce4cb5ea6ef42dca40263eabb85f37700d01693a68e9b30a31d78e871",
+  "split": "train documents only (val iff int(sha256(id)[:8], 16) % 100 == 0)",
+  "prefix_equals_train_bin_tokens": 200000154
+}
