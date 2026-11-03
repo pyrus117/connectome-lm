@@ -22,7 +22,7 @@ In Stage 2A, COUNT was compared with B0. Here the baseline is COUNT itself. A hi
   - The 1-token order is exact only.
   - Why this form: it changes one thing from Stage 2A. An empty slot becomes a filled one, and nothing else moves.
 - **Leave-one-out for buckets.** During training the position's own occurrence is subtracted from the bucket's continuation count and total. The bucket row is dropped if its total reaches 0. Validation uses no correction. Why: the count corpus contains the training stream, so a bucket's counts include the position's own next token, which validation text never gets. This was tested against a brute-force reference.
-- **The hash (the fly's Kenyon cells).** The one Stage 2B-0's sweep selected by its pre-registered rule: PPMI token codes (64-d), dense random projection into two sub-codebooks of 2,048 cells, 2 winners per sub-codebook, homeostatic thresholds on. Two winners had the lowest rare-history held-out loss in the sweep. The hash is rebuilt deterministically from Stage 2B-0's final-run codes and calibration sample (`scripts/build_bucket_tables.py`) and saved with the tables.
+- **The hash (the fly's Kenyon cells).** The one Stage 2B-0 selected (`results/stage2b0_selection.json`, `notes/deviations.md`): PPMI token codes (64-d), a sparse random projection (each cell connects to 31 random dimensions of the odour) into two sub-codebooks of 2,048 cells, one winner per sub-codebook, homeostatic thresholds on. The sweep's own rule picked a two-winner setting, but its tables hold about one bucket per distinct history (104.6M buckets at 3-token histories alone), which this machine cannot hold; feasibility was added to the rule before any validation score of the final stage existed. The hash is rebuilt deterministically from Stage 2B-0's final-run codes and calibration sample (`scripts/build_bucket_tables.py`) and saved with the tables.
 - **Random-bucket control.** It hashes the token ids of the history (splitmix64) into 4,194,304 buckets, so it pools unrelated histories. It shows what pooling alone does.
 - **Bucket tables.** Built over the whole 881,048,239-token count corpus: all histories of 2, 3 and 4 tokens, including those seen once. Top 16 continuations per bucket with the bucket's total. Bucket rows are kept at any count.
 - **Metric.** As in Stage 2A: mean cross-entropy on the first 2,097,152 tokens of `data/fineweb/val.bin` at the last step. Also recorded: wall-clock per step, peak VRAM, peak host RSS, mean lookup seconds per step.
@@ -50,8 +50,9 @@ On held-out text at a 100M-token universe, averaged over positions whose 4-token
 
 | Bucket type | Gain (nats) |
 |---|---|
-| Kenyon, two winners | 0.0248 |
-| Kenyon, default (one winner) | 0.0205 |
+| Kenyon, 31 inputs per cell (the setting used here) | 0.0207 |
+| Kenyon, default (dense, one winner) | 0.0205 |
+| Kenyon, two winners (selected by the rule, too large to build) | 0.0248 |
 | Kenyon from random codes | 0.0043 |
 | Random buckets | 0.0007 |
 
