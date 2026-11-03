@@ -13,3 +13,16 @@ real calibrated thresholds), and the new code is 2.5 times faster (0.5-0.7 s per
 tests/test_kenyon.py::test_the_fused_gather_gives_the_drive_and_buckets_of_the_plain_sum keeps the equivalence.
 The sweep had run 20 minutes of its first configuration when it was stopped and restarted on the new code; no result
 had been written.
+
+## 2026-11-03, Stage 2B-0, commit 74eb3f9: crash fix, memory-bounded bucket tables, and --resume
+
+The sweep was killed by the kernel OOM killer at 15:31 (MemoryMax 12 GB) while building the order-5 bucket table of the
+4-winner configuration, after seven configurations had finished (default, K1, K3, K7, K15, K31, winners2; their rows
+are in results/stage2b0_sweep.json). Pooling every (bucket, continuation) pair in memory also would not fit at the
+871M-token scale of the final run (the estimated pair count is several hundred million).
+Fix: `bucket_table` (src/clm/kenyon.py) now routes each partition's entries to 32 spill files on disk (data/spill, not
+the RAM-backed /tmp) by bucket-key range and pools one shard at a time; shards are ascending key ranges so the table
+comes out in key order. Check: tables identical (all five arrays) to the previous implementation on a 12M-token
+universe with 2 winners, and tests/test_kenyon.py compares 1, 2, 7 and 40 shards on skewed and hashed keys.
+`scripts/stage2b0.py sweep --resume` keeps the rows already in the result file and runs only the missing
+configurations; the seven finished rows were computed by the earlier, unsharded code, whose output is identical by the check above.
