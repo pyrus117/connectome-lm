@@ -26,3 +26,19 @@ comes out in key order. Check: tables identical (all five arrays) to the previou
 universe with 2 winners, and tests/test_kenyon.py compares 1, 2, 7 and 40 shards on skewed and hashed keys.
 `scripts/stage2b0.py sweep --resume` keeps the rows already in the result file and runs only the missing
 configurations; the seven finished rows were computed by the earlier, unsharded code, whose output is identical by the check above.
+
+## 2026-11-03, Stage 2B-0, commit bc2e941: the final stage uses K31, not winners2 (feasibility added to the selection rule)
+
+PREREG_stage2b0.md section 3 selects the Kenyon configuration with the lowest held-out rare loss. Applied to the whole
+sweep it chose winners2 (5.09684). The final stage at 871M tokens then failed: the winners2 bucket tables have about one
+bucket per distinct history (10.2M buckets at 2-token histories and 104.6M at 3-token histories before the order-5 table
+was OOM-killed at 14 GB, 2026-11-03 18:07; the sweep showed 55M at 4-token histories for only 100M tokens). The network
+arm needs the whole table in host memory at every training position, which this machine cannot hold for such a table, so a
+winners2 result could never be used by Stage 2B.
+Decision, taken before any validation score of the final stage existed (the killed run had scored only the exact model):
+the rule is applied to the configurations whose tables fit, defined as at most 5M buckets at the longest history length (the
+winners=1 family, 0.4M to 3.1M). K31 (31 inputs per cell, one winner, thresholds on) has the lowest rare loss among them
+(5.10096 against K15 5.10099 and default 5.10116). results/stage2b0_selection.json records this; scripts/stage2b0.py
+`final`, scripts/build_bucket_tables.py and scripts/stage2c.py read it in place of the sweep's own choice. The sweep file
+is unchanged. PREREG_stage2b.md is amended to match before any Stage 2B run. The exact tables and codes of the final stage were
+cached by the killed run and are reused.
