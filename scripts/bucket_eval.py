@@ -40,8 +40,8 @@ def evaluate_run(run, device, reader):
         x, y = get_batch(val, starts[i:i + tcfg.micro], mcfg.ctx, cpu)
         kw = {}
         if mem is not None:
-            tok, score = mem.lookup(x.numpy())
-            kw["count"] = (torch.from_numpy(tok).to(device), torch.from_numpy(score).to(device))
+            got = mem.lookup(x.numpy(), states=mcfg.count_orders > 0)
+            kw["count"] = tuple(torch.from_numpy(a).to(device) for a in got)
         with _autocast(device):
             logits, _ = model(x.to(device), **kw)
         nll = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), y.to(device).reshape(-1),

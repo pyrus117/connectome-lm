@@ -27,12 +27,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from clm import counts as C
 
 
 BUCKET_EDGES = (1, 10, 100, 1000)
 BUCKET_LABELS = ("not stored", "1-9", "10-99", "100-999", ">=1000")
+# Gated read (s2model.B0GPT._gate): count bins of a stored history, 1-9 / 10-99 / 100-999 / >=1000.
+GATE_EDGES = BUCKET_EDGES[1:]
+N_GATE_BINS = len(GATE_EDGES) + 1
 
 
 def bucket_of(history_counts):
@@ -94,16 +98,20 @@ class CountReader:
             if k not in {t.k for t in self.tables}:
                 raise ValueError(f"buckets for history length {k}, which has no exact table")
 
-    def lookup(self, x, y=None):
+    def lookup(self, x, y=None, states=False):
         """x, y: integer arrays (batch, time). Returns tokens int64 and scores
         float32, both (batch, time, slots); unused slots hold token 0, score 0.
         Scores are count ratios divided by the number of orders J.
         With `y` (the next token at each position) the position's own
-        occurrence is left out of the counts."""
+        occurrence is left out of the counts.
+        With `states`, also returns int8 (batch, time, J): 0 where the order has
+        no stored history, else 1 + source * N_GATE_BINS + count bin (source 0
+        exact, 1 bucket; the bin of the history count after leave-one-out)."""
         x = np.asarray(x)
         b, t = x.shape
         tok = np.zeros((b, t, self.slots), dtype=np.int64)
         score = np.zeros((b, t, self.slots), dtype=np.float32)
+        state = np.zeros((b, t, len(self.tables)), dtype=np.int8)
         kk = self.k_top
         for o, (table, c_min) in enumerate(zip(self.tables, self.c_min)):
             k = table.k
@@ -111,19 +119,21 @@ class CountReader:
                 continue
             sl = slice(o * kk, (o + 1) * kk)
             bi, ti, row = find_rows(table, x)
-            keep = self._fill(tok, score, sl, table, c_min, bi, ti, row, y)
+            keep, hc = self._fill(tok, score, sl, table, c_min, bi, ti, row, y)
+            state[bi[keep], ti[keep], o] = 1 + np.digitize(hc[keep], GATE_EDGES)
             if k in self.buckets:
                 used = np.zeros((b, t), dtype=bool)
                 used[bi[keep], ti[keep]] = True
                 bucket_table, keyfn = self.buckets[k]
                 bi2, ti2, row2 = find_rows(bucket_table, x, keyfn, want=~used[:, k - 1:])
-                self._fill(tok, score, sl, bucket_table, 1, bi2, ti2, row2, y)
-        return tok, score
+                keep2, hc2 = self._fill(tok, score, sl, bucket_table, 1, bi2, ti2, row2, y)
+                state[bi2[keep2], ti2[keep2], o] = 1 + N_GATE_BINS + np.digitize(hc2[keep2], GATE_EDGES)
+        return (tok, score, state) if states else (tok, score)
 
     def _fill(self, tok, score, sl, table, c_min, bi, ti, row, y):
         """Write the first k_top stored continuations of each found row into the slot columns `sl`,
         with leave-one-out when `y` is given. Returns which rows were kept (history count still
-        at least c_min after the position's own occurrence is removed)."""
+        at least c_min after the position's own occurrence is removed) and every row's history count."""
         kk = self.k_top
         lo = table.offsets[row].astype(np.int64)
         n = np.minimum(table.offsets[row + 1].astype(np.int64) - lo, kk)
@@ -139,7 +149,7 @@ class CountReader:
         ok = live & keep[:, None]
         tok[bi, ti, sl] = np.where(ok, etok, 0)
         score[bi, ti, sl] = np.where(ok, ecnt / np.maximum(hc, 1)[:, None], 0.0) / len(self.tables)
-        return keep
+        return keep, hc
 
     def history_counts(self, x, k):
         """C(h) of the stored k-token history ending at each position; 0 where it is
@@ -168,9 +178,15 @@ class StepData:
     tok: np.ndarray | None
     score: np.ndarray | None
     lookup_seconds: float
+    state: np.ndarray | None = None
+
+    def count(self, sl, device):
+        """The model's `count` argument for batch rows `sl`: (tokens, scores), plus states when read."""
+        arrays = (self.tok, self.score) if self.state is None else (self.tok, self.score, self.state)
+        return tuple(torch.from_numpy(a[sl]).to(device) for a in arrays)
 
 
-def make_step(train, ctx, batch, seed, step, reader, loo):
+def make_step(train, ctx, batch, seed, step, reader, loo, states=False):
     """Inputs, targets and COUNT scores of one optimizer step. Depends only on
     (seed, step), so a resumed run reads exactly what an unbroken run would."""
     from clm.data import batch_starts
@@ -180,8 +196,8 @@ def make_step(train, ctx, batch, seed, step, reader, loo):
     if reader is None:
         return StepData(step, x, y, None, None, 0.0)
     t0 = time.perf_counter()
-    tok, score = reader.lookup(x, y if loo else None)
-    return StepData(step, x, y, tok, score, time.perf_counter() - t0)
+    got = reader.lookup(x, y if loo else None, states)
+    return StepData(step, x, y, got[0], got[1], time.perf_counter() - t0, got[2] if states else None)
 
 
 class Prefetcher:

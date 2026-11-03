@@ -13,9 +13,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim._muon import _adjust_lr, _zeropower_via_newtonschulz
 
+from clm.countread import N_GATE_BINS
 from clm.model import _seed_for
 
-_ZERO_INIT = (".proj.weight", ".down.weight", "head.weight")
+_ZERO_INIT = (".proj.weight", ".down.weight", "head.weight", "count_absent")
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class B0Config:
     mlp_mult: int = 4
     softcap: float = 15.0
     rope_base: float = 10000.0
+    count_orders: int = 0         # > 0: gated COUNT read over this many orders (B0GPT._gate)
 
 
 def rms(x):
@@ -82,6 +84,9 @@ class B0GPT(nn.Module):
         self.ve_layers = (0, cfg.n_layer - 1)
         self.blocks = nn.ModuleList(Block(cfg, i in self.ve_layers) for i in range(cfg.n_layer))
         self.head = nn.Linear(cfg.d_model, cfg.vocab, bias=False)
+        if cfg.count_orders:
+            self.count_gate = nn.Parameter(torch.ones(cfg.count_orders, 2 * N_GATE_BINS))
+            self.count_absent = nn.Parameter(torch.zeros(cfg.count_orders, cfg.d_model))
         cos, sin = rotary(cfg.ctx, cfg.d_model // cfg.n_head, cfg.rope_base)
         self.register_buffer("cos", cos, persistent=False)
         self.register_buffer("sin", sin, persistent=False)
@@ -90,13 +95,19 @@ class B0GPT(nn.Module):
         """extra: an optional (batch, time, d_model) input added to the embedding.
         count: COUNT's (tokens, scores), both (batch, time, slots), from
         clm.countread; the embedding gets the scores' weighted sum of rows of
-        the untied head (Magnusson et al. 2026, Eq. 1), gradients included."""
+        the untied head (Magnusson et al. 2026, Eq. 1), gradients included.
+        A gated model (cfg.count_orders > 0) takes (tokens, scores, states) instead; see _gate."""
         x = self.embed(idx)
         if extra is not None:
             x = x + extra
         if count is not None:
-            tok, score = count
+            tok, score, *state = count
+            if len(state) != (1 if self.cfg.count_orders else 0):
+                raise ValueError("a gated model reads (tokens, scores, states); an ungated one (tokens, scores)")
             b, t, s = tok.shape
+            if state:
+                score, absent = self._gate(score, state[0])
+                x = x + absent
             x = x + F.embedding_bag(tok.reshape(b * t, s), self.head.weight,
                                     per_sample_weights=score.reshape(b * t, s), mode="sum").view(b, t, -1)
         x = rms(x)
@@ -108,6 +119,20 @@ class B0GPT(nn.Module):
         if targets is None:
             return logits, None
         return logits, F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
+
+    def _gate(self, score, state):
+        """Gated COUNT read (states from CountReader.lookup(states=True)). Each order's scores are scaled by a
+        learned scalar for its (source, count bin), Jelinek-Mercer weights bucketed by history count (Bahl et al.
+        1983, via Chen & Goodman 1999); an order with no stored history adds its own learned vector instead of
+        nothing. At init (gates 1, vectors 0) this is the ungated read exactly. Returns (scores, absent input)."""
+        j = self.cfg.count_orders
+        if state.shape[-1] != j or score.shape[-1] % j:
+            raise ValueError(f"gated read over {j} orders got states {tuple(state.shape)}, scores {tuple(score.shape)}")
+        state = state.long()
+        present = state > 0
+        g = self.count_gate[torch.arange(j, device=state.device), (state - 1).clamp_min(0)] * present
+        absent = (~present).to(self.count_absent.dtype) @ self.count_absent
+        return score * g.repeat_interleave(score.shape[-1] // j, dim=-1), absent
 
     def non_embedding_params(self):
         skip = {id(self.embed.weight), *(id(e.weight) for e in self.value_embed)}
@@ -122,6 +147,8 @@ def init_b0(model, seed):
             g = torch.Generator().manual_seed(_seed_for(seed, name))
             if name.endswith(_ZERO_INIT) or name.endswith("ve_gate"):
                 new = torch.zeros(p.shape)
+            elif name == "count_gate":
+                new = torch.ones(p.shape)
             elif "embed" in name:
                 new = torch.randn(p.shape, generator=g)
             else:

@@ -6,7 +6,7 @@ import pytest
 
 from clm import counts as C
 from clm import kenyon as K
-from clm.countread import BUCKET_LABELS, CountReader, Prefetcher, bucket_of, make_step
+from clm.countread import BUCKET_LABELS, N_GATE_BINS, CountReader, Prefetcher, bucket_of, make_step
 from test_counts import EOT, brute, corpus
 
 C_MIN = (1, 1, 2, 2)                  # orders 2..5, as in the real tables
@@ -246,3 +246,40 @@ def test_buckets_for_a_history_length_without_an_exact_table_are_refused(stream,
     other = K.bucket_table(stream, 2, EOT, K.exclude_eot(bucket_fn, EOT), c_min=1, parts=1)
     with pytest.raises(ValueError, match="no exact table"):
         CountReader(tmp_path, k_top=K_TOP, buckets={2: (other, None)})
+
+
+def expected_states(stream, x, y, loo, bucket_ks):
+    """Brute force of lookup(states=True): {(b, t, order index): state} for each order with a stored history.
+    State 1 + bin for an exact history, 1 + N_GATE_BINS + bin for a pooled bucket, the bin taken from the history
+    count after leave-one-out (1-9, 10-99, 100-999, >=1000)."""
+    edges, out = (10, 100, 1000), {}
+    for o, k in enumerate(range(1, 5)):
+        rows, pooled = brute(stream, k), defaultdict(int)
+        for h, cont in rows.items():
+            pooled[sum(h) % 6] += sum(cont.values())
+        for b in range(x.shape[0]):
+            for t in range(k - 1, x.shape[1]):
+                h = tuple(int(v) for v in x[b, t - k + 1:t + 1])
+                if EOT in h:
+                    continue
+                total = sum(rows[h].values()) - loo if h in rows else 0
+                if total >= C_MIN[o]:
+                    out[(b, t, o)] = 1 + int(np.digitize(total, edges))
+                elif k in bucket_ks and pooled[sum(h) % 6] - loo >= 1:
+                    out[(b, t, o)] = 1 + N_GATE_BINS + int(np.digitize(pooled[sum(h) % 6] - loo, edges))
+    return out
+
+
+@pytest.mark.parametrize("loo", [False, True])
+def test_states_name_each_order_s_source_and_count_bin(stream, reader, bucket_reader, loo):
+    x, y = windows(stream, np.random.default_rng(11))
+    yy = y if loo else None
+    for r, ks in ((reader, ()), (bucket_reader, BUCKET_KS)):
+        tok, score, state = r.lookup(x, yy, states=True)
+        assert state.shape == (6, 24, 4) and state.dtype == np.int8
+        tok0, score0 = r.lookup(x, yy)
+        assert np.array_equal(tok, tok0) and np.array_equal(score, score0)          # states change nothing else
+        want = expected_states(stream, x, y, loo, ks)
+        assert {(int(b), int(t), int(o)): int(state[b, t, o]) for b, t, o in zip(*np.nonzero(state))} == want
+    exact = {v for v in want.values() if v <= N_GATE_BINS}
+    assert len(exact) >= 3 and any(v > N_GATE_BINS for v in want.values())       # the fixture reaches several bins

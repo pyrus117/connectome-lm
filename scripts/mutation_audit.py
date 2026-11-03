@@ -16,7 +16,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 PY = REPO / ".venv" / "bin" / "python"
-WORK = Path("/tmp/clm-mut")
+WORK = Path(os.environ.get("CLM_MUT_WORK", "/tmp/clm-mut"))       # override when two audits run at once
 
 MUTANTS = [
     ("M1", "src/clm/graphs.py", "post = degree_preserving_shuffle(n, pre, post, rng)", "post = post",
@@ -117,7 +117,7 @@ MUTANTS = [
      "tests/test_countread.py::test_read_matches_a_brute_force_count_with_and_without_leave_one_out"),
     ("M43", "src/clm/countread.py", "(nxt, self.pool.submit(self.make, nxt))", "(nxt, self.pool.submit(self.make, step))",
      "tests/test_countread.py::test_prefetcher_hands_over_each_step_it_was_asked_for_and_reads_ahead"),
-    ("M44", "src/clm/countread.py", "tok, score = reader.lookup(x, y if loo else None)", "tok, score = reader.lookup(x, y)",
+    ("M44", "src/clm/countread.py", "got = reader.lookup(x, y if loo else None, states)", "got = reader.lookup(x, y, states)",
      "tests/test_s2count.py::test_training_reads_leave_one_out_counts_only_when_asked"),
     ("M45", "src/clm/s2model.py", 'per_sample_weights=score.reshape(b * t, s), mode="sum")',
      'per_sample_weights=torch.ones_like(score).reshape(b * t, s), mode="sum")',
@@ -125,7 +125,7 @@ MUTANTS = [
     ("M46", "src/clm/s2model.py", "F.embedding_bag(tok.reshape(b * t, s), self.head.weight,",
      "F.embedding_bag(tok.reshape(b * t, s), self.embed.weight,",
      "tests/test_s2count.py::test_count_input_is_the_score_weighted_sum_of_head_rows"),
-    ("M47", "src/clm/s2train.py", "tok, score = reader.lookup(x.numpy())", "tok, score = reader.lookup(x.numpy(), y.numpy())",
+    ("M47", "src/clm/s2train.py", "got = reader.lookup(x.numpy(), states=states)", "got = reader.lookup(x.numpy(), y.numpy(), states=states)",
      "tests/test_s2count.py::test_validation_reads_counts_without_leave_one_out_and_training_reads_them_with_it"),
     ("M48", "src/clm/ngram_lm.py", "denom = np.maximum(1.0 - (low_stored * live).sum(1), 1e-12)", "denom = np.ones_like(mass)",
      "tests/test_ngram_lm.py::test_probabilities_sum_to_one_over_the_vocabulary_at_every_position"),
@@ -244,6 +244,27 @@ MUTANTS = [
     ("M95", "src/clm/consolidate_fix.py", "a_logits = _forward(original, reader, None, ax, device)",
      "a_logits = _forward(model, reader, None, ax, device)",
      "tests/test_consolidate_fix.py::test_the_default_variant_reproduces_the_registered_consolidation_exactly"),
+    # Gated COUNT read (src/clm/countread.py states, s2model.py B0GPT._gate, s2train.py count_gate)
+    ("M100", "src/clm/countread.py", "state[bi[keep], ti[keep], o] = 1 + np.digitize(",
+     "state[bi[keep], ti[keep], o] = 1 + N_GATE_BINS + np.digitize(",
+     "tests/test_countread.py::test_states_name_each_order_s_source_and_count_bin"),
+    ("M101", "src/clm/countread.py", "state[bi2[keep2], ti2[keep2], o] = 1 + N_GATE_BINS + np.digitize(",
+     "state[bi2[keep2], ti2[keep2], o] = 1 + np.digitize(",
+     "tests/test_countread.py::test_states_name_each_order_s_source_and_count_bin"),
+    ("M102", "src/clm/countread.py", "GATE_EDGES = BUCKET_EDGES[1:]", "GATE_EDGES = BUCKET_EDGES",
+     "tests/test_countread.py::test_states_name_each_order_s_source_and_count_bin"),
+    ("M103", "src/clm/s2model.py", "absent = (~present).to(", "absent = present.to(",
+     "tests/test_s2count.py::test_gated_read_scales_each_order_by_its_own_scalar_and_fills_absent_orders"),
+    ("M104", "src/clm/s2model.py", "(state - 1).clamp_min(0)]", "(state - 1).clamp_min(0) * 0]",
+     "tests/test_s2count.py::test_gated_read_scales_each_order_by_its_own_scalar_and_fills_absent_orders"),
+    ("M105", "src/clm/s2model.py", "g.repeat_interleave(score.shape[-1] // j, dim=-1)", "g.repeat(1, 1, score.shape[-1] // j)",
+     "tests/test_s2count.py::test_gated_read_scales_each_order_by_its_own_scalar_and_fills_absent_orders"),
+    ("M106", "src/clm/s2model.py", "new = torch.ones(p.shape)", "new = torch.zeros(p.shape)",
+     "tests/test_s2count.py::test_a_fresh_gated_model_reads_exactly_as_the_ungated_one"),
+    ("M107", "src/clm/s2model.py", '"head.weight", "count_absent")', '"head.weight")',
+     "tests/test_s2count.py::test_a_fresh_gated_model_reads_exactly_as_the_ungated_one"),
+    ("M108", "src/clm/s2train.py", '+ ("_gated" if tcfg.count_gate else "")', '+ ""',
+     "tests/test_s2count.py::test_a_gated_run_trains_its_gates_and_reports_them"),
 ]
 
 
@@ -317,7 +338,7 @@ def main():
                     if code != 0 and "ImportError" in out else "UNEXPECTED",
                     "evidence": out.strip().splitlines()[-1][:200]})
     print(json.dumps(results[-1]), flush=True)
-    Path("/tmp/clm_mutation_results.json").write_text(json.dumps(results, indent=2))
+    Path(os.environ.get("CLM_MUT_RESULTS", "/tmp/clm_mutation_results.json")).write_text(json.dumps(results, indent=2))
     bad = [r["id"] for r in results if r["id"].startswith("M") and r["verdict"] != "KILLED by assertion"]
     bad += [r["id"] for r in results if r["id"].startswith("C") and "required" not in r["verdict"]]
     if bad:
