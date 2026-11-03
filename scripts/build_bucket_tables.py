@@ -31,7 +31,6 @@ def main():
     ap.add_argument("--parts", type=int, default=24)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--max-tokens", type=int, help="use only the first N tokens (smoke tests)")
-    ap.add_argument("--sweep-json", type=Path, default=ROOT / "results" / "stage2b0_sweep.json")
     args = ap.parse_args()
     torch.set_num_threads(args.threads)
     info = json.loads((ROOT / "data/fineweb/count_corpus.json").read_text())
@@ -46,7 +45,7 @@ def main():
         n_buckets = B.UNITS * B.UNITS
         fns = {k: K.exclude_eot(lambda packed, toks: K.hash_bucket(packed, n_buckets), eot) for k in B.ORDERS}
     else:
-        cfg = json.loads(args.sweep_json.read_text())["selected_config"]
+        _, cfg = B.load_selection()
         universe, _ = B.split(open_tokens(ROOT / "data/fineweb/count_corpus.bin"), eot, None)
         cache = ROOT / "data" / "count_2b0" / f"final-{len(universe)}"
         if not (cache / "codes.npz").exists():

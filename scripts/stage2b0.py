@@ -44,6 +44,16 @@ DEFAULT = {"codes": "ppmi", "in_degree": None, "winners": 1, "thresholds": True}
 GATE = 0.02                                   # nats: Kenyon must beat random buckets by this in both rare classes
 
 
+def load_selection():
+    """(name, config) of the Kenyon configuration the final stage and the Stage 2B builder use: the override
+    file if there is one (results/stage2b0_selection.json), else the sweep's own choice."""
+    override = OUT / "stage2b0_selection.json"
+    src = json.loads((override if override.exists() else OUT / "stage2b0_sweep.json").read_text())
+    if "selected_config" not in src:
+        sys.exit("run the sweep to completion first")
+    return src["selected"], src["selected_config"]
+
+
 def doc_start_at_or_after(tokens, eot, pos):
     window = np.asarray(tokens[pos:pos + 1_000_000])
     hit = np.flatnonzero(window == eot)
@@ -216,10 +226,7 @@ def sweep(args):
 
 
 def final(args):
-    sel = json.loads((OUT / "stage2b0_sweep.json").read_text())
-    if "selected_config" not in sel:
-        sys.exit("run the sweep to completion first")
-    cfg = sel["selected_config"]
+    selected, cfg = load_selection()
     d = prepare(args.universe_tokens, args.parts, ("held", "val"), "final")
     runs = [("kenyon", cfg, "kenyon"), ("random_buckets", cfg, "random"),
             ("random_codes", {**cfg, "codes": "random"}, "kenyon")]
@@ -235,7 +242,7 @@ def final(args):
         gain_r = by["random_buckets"]["val_exact"][lab] - by["random_buckets"]["val_mixture"][lab]
         gate[lab] = {"kenyon_gain": gain_k, "random_bucket_gain": gain_r, "difference": gain_k - gain_r}
     passed = all(g["difference"] >= GATE for g in gate.values())
-    out = {"prereg_sha256": prereg_sha(), "universe_tokens": d["universe_tokens"], "selected": sel["selected"],
+    out = {"prereg_sha256": prereg_sha(), "universe_tokens": d["universe_tokens"], "selected": selected,
            "config": cfg, "rows": rows,
            "gate2": {"threshold": GATE, "classes": gate, "result": "PASS" if passed else "FAIL"}}
     (OUT / "stage2b0_final.json").write_text(json.dumps(out, indent=2) + "\n")

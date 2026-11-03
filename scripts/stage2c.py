@@ -142,12 +142,12 @@ def bucket_keyfns():
     """Cue-token bucket functions for the twin test: exact only, the selected Kenyon hash for a one-token history,
     the same hash on random codes, and a plain hash of the token id (which gives no similarity at all)."""
     fns = {"exact": None, "token_hash": lambda t: K.hash_bucket(np.asarray(t, dtype=np.uint64), 2048 * 2048)}
-    sweep = ROOT / "results" / "stage2b0_sweep.json"
+    import stage2b0
     caches = sorted((ROOT / "data" / "count_2b0").glob("final-*/codes.npz")) if (ROOT / "data" / "count_2b0").exists() else []
-    if not sweep.exists() or not caches:
+    if not (ROOT / "results" / "stage2b0_sweep.json").exists() or not caches:
         print("no Stage 2B-0 final-stage codes: the Kenyon bucket overlay is not run", flush=True)
         return fns
-    cfg = json.loads(sweep.read_text())["selected_config"]
+    _, cfg = stage2b0.load_selection()
     z = np.load(caches[-1])
     corpus = open_tokens(ROOT / "data/fineweb/count_corpus.bin")
     sample = np.asarray(corpus[np.random.default_rng(0).integers(0, len(corpus), 80_000)]).astype(np.int64)[:, None]
