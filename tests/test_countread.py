@@ -1,7 +1,11 @@
+from collections import Counter, defaultdict
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from clm import counts as C
+from clm import kenyon as K
 from clm.countread import BUCKET_LABELS, CountReader, Prefetcher, bucket_of, make_step
 from test_counts import EOT, brute, corpus
 
@@ -166,3 +170,79 @@ def test_buckets_split_at_1_10_100_and_1000_and_skip_short_windows():
     c = np.array([-1, 0, 1, 9, 10, 99, 100, 999, 1000, 10**6])
     assert bucket_of(c).tolist() == [-1, 0, 1, 1, 2, 2, 3, 3, 4, 4]
     assert len(BUCKET_LABELS) == 5
+
+
+def bucket_fn(packed, toks):
+    return (toks.sum(1) % 6).astype(np.uint64)          # 6 buckets: pools unrelated histories, but exactly computable
+
+
+BUCKET_KS = (2, 3)
+
+
+@pytest.fixture(scope="module")
+def bucket_reader(stream, tmp_path_factory):
+    d = tmp_path_factory.mktemp("tables2")
+    for k, c_min in zip(range(1, 5), C_MIN):
+        C.save(C.build(stream, k, EOT, c_min, parts=3), d / f"order{k + 1}", {"c_min": c_min, "eot_id": EOT})
+    fn = K.exclude_eot(bucket_fn, EOT)
+    buckets = {k: (K.bucket_table(stream, k, EOT, fn, c_min=1, parts=3), fn) for k in BUCKET_KS}
+    return CountReader(d, k_top=K_TOP, buckets=buckets)
+
+
+def expected_with_buckets(stream, x, y, loo):
+    """Brute force: the exact read, and for each bucketed order a missing exact history gets its bucket's pooled row."""
+    out = expected(stream, x, y, loo)
+    for k in BUCKET_KS:
+        o = k - 1
+        pooled = defaultdict(Counter)
+        for h, cont in brute(stream, k).items():
+            for w, c in cont.items():
+                pooled[sum(h) % 6][w] += c
+        for b in range(x.shape[0]):
+            for t in range(k - 1, x.shape[1]):
+                h = tuple(int(v) for v in x[b, t - k + 1:t + 1])
+                if (b, t, o) in out or EOT in h:
+                    continue
+                cnt = pooled[sum(h) % 6]
+                top = sorted(cnt.items(), key=lambda kv: (-kv[1], kv[0]))[:C.TOP][:K_TOP]
+                total = sum(cnt.values())
+                if loo:
+                    w = int(y[b, t])
+                    total -= 1
+                    top = [(tok, c - (tok == w)) for tok, c in top]
+                if total < 1:
+                    continue
+                got = {tok: c / total / len(C_MIN) for tok, c in top if c > 0}
+                if got:
+                    out[(b, t, o)] = got
+    return out
+
+
+@pytest.mark.parametrize("loo", [False, True])
+def test_a_missing_exact_history_reads_its_pooled_bucket_instead(stream, bucket_reader, loo):
+    x, y = windows(stream, np.random.default_rng(9))
+    tok, score = bucket_reader.lookup(x, y if loo else None)
+    want = expected_with_buckets(stream, x, y, loo)
+    close(read_back(bucket_reader, tok, score), want)
+    plain = expected(stream, x, y, loo)
+    assert len(want) > len(plain)                                   # the fallback filled slots that were empty
+
+
+def test_exact_histories_keep_their_own_counts_and_buckets_only_fill_gaps(stream, reader, bucket_reader):
+    x, y = windows(stream, np.random.default_rng(10))
+    for yy in (None, y):
+        tok0, score0 = reader.lookup(x, yy)
+        tok1, score1 = bucket_reader.lookup(x, yy)
+        filled = score0 > 0
+        assert np.array_equal(score0[filled], score1[filled]) and np.array_equal(tok0[filled], tok1[filled])
+        unbucketed = [o for o in range(4) if o + 1 not in BUCKET_KS]
+        for o in unbucketed:
+            sl = slice(o * K_TOP, (o + 1) * K_TOP)
+            assert np.array_equal(score0[..., sl], score1[..., sl])
+
+
+def test_buckets_for_a_history_length_without_an_exact_table_are_refused(stream, tmp_path):
+    C.save(C.build(stream, 1, EOT, 1, parts=1), tmp_path / "order2", {"c_min": 1, "eot_id": EOT})
+    other = K.bucket_table(stream, 2, EOT, K.exclude_eot(bucket_fn, EOT), c_min=1, parts=1)
+    with pytest.raises(ValueError, match="no exact table"):
+        CountReader(tmp_path, k_top=K_TOP, buckets={2: (other, None)})

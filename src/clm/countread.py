@@ -51,23 +51,29 @@ def history_keys(x, k):
     return key, last
 
 
-def find_rows(table, x, keyfn=None):
+def find_rows(table, x, keyfn=None, want=None):
     """Positions whose history of table.k tokens, taken inside the window, is stored.
     Returns batch index, time index and row of each. A history holding the
     end-of-text id is never stored, so it is never found. `keyfn(packed, tokens)`
-    maps each history to another key (a bucket id) before the lookup."""
+    maps each history to another key (a bucket id) before the lookup; `want`, a
+    boolean (batch, time - k + 1) mask, restricts the lookup to those positions."""
     key, last = history_keys(x, table.k)
+    if want is None:
+        want = np.ones(key.shape, dtype=bool)
+    bi, pi = np.nonzero(want)
+    key = key[bi, pi]
     if keyfn is not None:
-        toks = np.stack([x[:, last - (table.k - 1) + j] for j in range(table.k)], axis=-1)
-        key = keyfn(key.reshape(-1), toks.reshape(-1, table.k)).reshape(key.shape)
+        toks = np.stack([x[bi, last[pi] - (table.k - 1) + j] for j in range(table.k)], axis=-1)
+        key = keyfn(key, toks)
     row = np.searchsorted(table.keys, key)
     hit = table.keys[np.minimum(row, table.keys.size - 1)] == key
-    bi, pi = np.nonzero(hit)
-    return bi, last[pi], row[bi, pi]
+    return bi[hit], last[pi[hit]], row[hit]
 
 
 class CountReader:
-    def __init__(self, directory, k_top=8):
+    def __init__(self, directory, k_top=8, buckets=None):
+        """buckets: optional {history length: (bucket table, keyfn)} (Stage 2B). Where an order's exact
+        history is not stored, its slot holds the pooled counts of the history's bucket instead."""
         found = sorted(Path(directory).glob("order*"))
         if not found:
             raise FileNotFoundError(f"no order* tables in {directory}")
@@ -83,6 +89,10 @@ class CountReader:
             raise ValueError(f"k_top {k_top} outside 1..{C.TOP}")
         self.k_top = k_top
         self.slots = len(self.tables) * k_top
+        self.buckets = buckets or {}
+        for k in self.buckets:
+            if k not in {t.k for t in self.tables}:
+                raise ValueError(f"buckets for history length {k}, which has no exact table")
 
     def lookup(self, x, y=None):
         """x, y: integer arrays (batch, time). Returns tokens int64 and scores
@@ -99,24 +109,37 @@ class CountReader:
             k = table.k
             if t < k:
                 continue
-            bi, ti, row = find_rows(table, x)
-            lo = table.offsets[row].astype(np.int64)
-            n = np.minimum(table.offsets[row + 1].astype(np.int64) - lo, kk)
-            live = np.arange(kk) < n[:, None]
-            at = np.where(live, lo[:, None] + np.arange(kk), 0)
-            etok, ecnt = table.tok[at].astype(np.int64), table.cnt[at].astype(np.int64)
-            hc = table.hcount[row].astype(np.int64)
-            keep = np.ones(hc.size, dtype=bool)
-            if y is not None:
-                ecnt = ecnt - (live & (etok == np.asarray(y)[bi, ti][:, None]))
-                hc = hc - 1
-                keep = hc >= c_min
-            ok = live & keep[:, None]
             sl = slice(o * kk, (o + 1) * kk)
-            tok[bi, ti, sl] = np.where(ok, etok, 0)
-            score[bi, ti, sl] = np.where(ok, ecnt / np.maximum(hc, 1)[:, None], 0.0) / len(self.tables)
+            bi, ti, row = find_rows(table, x)
+            keep = self._fill(tok, score, sl, table, c_min, bi, ti, row, y)
+            if k in self.buckets:
+                used = np.zeros((b, t), dtype=bool)
+                used[bi[keep], ti[keep]] = True
+                bucket_table, keyfn = self.buckets[k]
+                bi2, ti2, row2 = find_rows(bucket_table, x, keyfn, want=~used[:, k - 1:])
+                self._fill(tok, score, sl, bucket_table, 1, bi2, ti2, row2, y)
         return tok, score
 
+    def _fill(self, tok, score, sl, table, c_min, bi, ti, row, y):
+        """Write the first k_top stored continuations of each found row into the slot columns `sl`,
+        with leave-one-out when `y` is given. Returns which rows were kept (history count still
+        at least c_min after the position's own occurrence is removed)."""
+        kk = self.k_top
+        lo = table.offsets[row].astype(np.int64)
+        n = np.minimum(table.offsets[row + 1].astype(np.int64) - lo, kk)
+        live = np.arange(kk) < n[:, None]
+        at = np.where(live, lo[:, None] + np.arange(kk), 0)
+        etok, ecnt = table.tok[at].astype(np.int64), table.cnt[at].astype(np.int64)
+        hc = table.hcount[row].astype(np.int64)
+        keep = np.ones(hc.size, dtype=bool)
+        if y is not None:
+            ecnt = ecnt - (live & (etok == np.asarray(y)[bi, ti][:, None]))
+            hc = hc - 1
+            keep = hc >= c_min
+        ok = live & keep[:, None]
+        tok[bi, ti, sl] = np.where(ok, etok, 0)
+        score[bi, ti, sl] = np.where(ok, ecnt / np.maximum(hc, 1)[:, None], 0.0) / len(self.tables)
+        return keep
 
     def history_counts(self, x, k):
         """C(h) of the stored k-token history ending at each position; 0 where it is
@@ -129,6 +152,12 @@ class CountReader:
         bi, ti, row = find_rows(table, x)
         out[bi, ti] = table.hcount[row]
         return out
+
+
+def reader_for(count_dir, k_top, bucket_dir=None):
+    """The COUNT reader of a run: exact tables, plus bucket fallbacks when `bucket_dir` is given."""
+    from clm.kenyon import load_buckets
+    return CountReader(count_dir, k_top, load_buckets(bucket_dir) if bucket_dir else None)
 
 
 @dataclass

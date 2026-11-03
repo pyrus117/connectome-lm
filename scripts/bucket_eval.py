@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from clm.countread import BUCKET_LABELS, CountReader, bucket_of
+from clm.countread import BUCKET_LABELS, CountReader, bucket_of, reader_for
 from clm.data import eval_windows, get_batch, open_tokens
 from clm.s2model import B0Config, build_b0
 from clm.s2train import S2TrainConfig
@@ -29,7 +29,8 @@ def evaluate_run(run, device, reader):
     model = build_b0(mcfg, res["seed"]).to(device)
     model.load_state_dict(torch.load(run / "ckpt.pt", map_location=device)["model"])
     model.eval()
-    mem = CountReader(ROOT / tcfg.count_dir, tcfg.count_k) if tcfg.memory == "count" else None
+    mem = (reader_for(ROOT / tcfg.count_dir, tcfg.count_k, ROOT / tcfg.bucket_dir if tcfg.bucket_dir else None)
+           if tcfg.memory == "count" else None)
     val = open_tokens(ROOT / tcfg.val_bin)
     starts = eval_windows(len(val), mcfg.ctx, tcfg.eval_tokens)
     cpu = torch.device("cpu")
