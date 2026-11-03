@@ -129,7 +129,7 @@ def main():
                 "twin_bucket_collision_rate": None if keyfn is None else float(np.mean(keyfn(cues[a]) == keyfn(cues[b])))}
             if name == "exact":                                  # twins against the same number of unrelated pairs
                 c_cues, c_answers = make_pairs(pool, args.pairs, seed + 1000)
-                control = Overlay(vocab, weight)
+                control = Overlay(vocab, weights)
                 control.write(c_cues, c_answers)
                 entry[name]["random_pairs_control_recall"] = recall(control, c_cues, c_answers)
             print(f"seed {seed} {name}: {entry[name]}", flush=True)

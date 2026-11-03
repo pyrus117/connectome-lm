@@ -2,6 +2,7 @@
 
 Dated 2026-11-03. Committed before any Stage 2B run. Plan: `docs/superpowers/plans/2026-11-02-stage2-kenyon-memory.md` (§7.3, §9 P4, §11). This stage runs only if Stage 2B-0's gate 2 passed (`PREREG_stage2b0.md` §4) and Stage 2A's gate 1 passed (`PREREG_stage2a.md` §5). It is registered now so that nothing about it can drift toward a result.
 
+Amendment, 2026-11-03 evening, before any Stage 2B run: the paragraph above says this stage runs only if gate 2 passed, and gate 2 failed. Kenyon beat random buckets by 0.0151 in "not stored" and 0.0130 in "1-9", against a bar of 0.02 (`notes/stage2b0_result_2026-11-03.md`). After the Stage 2D report, Nate decided to run Stage 2B anyway. Nothing else in this document changes: arms, settings, metric, decision rule and limits are as registered, and the result will be reported as "run despite a failed gate". The offline gain suggests the network effect is near or below the 0.01 SESOI, so NO_MEANINGFUL_DIFFERENCE or INCONCLUSIVE are likely outcomes, and the five-seed extension in section 5 applies as written.
 Code: `src/clm/countread.py` (bucket fallback), `src/clm/kenyon.py`, `src/clm/s2train.py`, `scripts/build_bucket_tables.py`, `scripts/stage2b_driver.py`, `scripts/stage2b_analyze.py`, `scripts/bucket_eval.py`. Config `configs/stage2b.json`. Branch `stage2b0`.
 
 ## 1. Question

@@ -42,3 +42,18 @@ winners=1 family, 0.4M to 3.1M). K31 (31 inputs per cell, one winner, thresholds
 `final`, scripts/build_bucket_tables.py and scripts/stage2c.py read it in place of the sweep's own choice. The sweep file
 is unchanged. PREREG_stage2b.md is amended to match before any Stage 2B run. The exact tables and codes of the final stage were
 cached by the killed run and are reused.
+
+## 2026-11-03, Stage 2C, crash fix: twins stage used an unbound name
+
+The `lists` stage of scripts/stage2c.py finished (results/stage2c_lists.json, 22:35). The `twins` stage then crashed at the
+random-pairs control with `UnboundLocalError: weight` (line 132): the variable is called `weights` there (it holds the single
+chosen write weight read from stage2c_lists.json). One-word fix, `Overlay(vocab, weights)`. No result had been produced by
+the twins stage, and the lists results are untouched. The twins stage is rerun from scratch; the driver skips the finished lists.
+
+## 2026-11-03, Stage 2B: run at Nate's request although gate 2 failed
+
+PREREG_stage2b.md says Stage 2B runs only if gate 2 passed. Gate 2 failed (0.0151 and 0.0130 against 0.02, see
+notes/stage2b0_result_2026-11-03.md) and the plan's rule was to write up instead. After the Stage 2D report Nate decided
+(2026-11-03, evening) to run Stage 2B anyway. This is a decision to run, not a change to the registered design: the arms,
+settings, metric and decision rules in PREREG_stage2b.md are unchanged, and the amendment note at its top says so. The result
+is reported as "run despite a failed gate".
