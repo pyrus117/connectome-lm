@@ -10,6 +10,7 @@ history positions of a per-token table, so a history costs k table lookups and
 one add, and the norm is the root of a sum of per-token squared norms.
 """
 import json
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -93,33 +94,36 @@ class KenyonHash:
                 keep[u, rng.choice(k * dim, in_degree, replace=False)] = True
             w = np.where(keep, w, 0.0).astype(np.float32)
         self.table = np.stack([centred @ w[:, j * dim:(j + 1) * dim].T for j in range(k)])   # (k, vocab, 2 units)
-        self._table, self._norm = torch.from_numpy(self.table), torch.from_numpy(self.norm2)
+        self._flat = torch.from_numpy(self.table.reshape(k * vocab, 2 * units))      # history position j, token v -> row j * vocab + v
+        self._offsets = torch.arange(k, dtype=torch.int64) * vocab
+        self._norm = torch.from_numpy(self.norm2)
         self.theta = np.zeros(2 * units, dtype=np.float32)
 
     def _drive(self, tokens):
         """(N, 2 * units) torch tensor: cell drive of N histories of k tokens, before thresholds."""
         t = torch.from_numpy(np.ascontiguousarray(tokens))
-        drive = sum(torch.nn.functional.embedding(t[:, j], self._table[j]) for j in range(self.k))
+        drive = torch.nn.functional.embedding_bag(t + self._offsets, self._flat, mode="sum")
         if self.use_thresholds:
-            drive = drive / self._norm[t].sum(1).sqrt().clamp_min(1e-6)[:, None]
+            drive /= self._norm[t].sum(1).sqrt().clamp_min(1e-6)[:, None]
         return drive
 
     def activation(self, tokens):
         """(N, 2 * units) cell drive for N histories of k tokens, before thresholds."""
         return self._drive(tokens).numpy()
 
-    def _winners(self, drive):
-        """(N, 2, winners) winning cell of each sub-codebook, sorted (numpy int64)."""
-        d = (drive - torch.from_numpy(self.theta)).view(len(drive), 2, self.units)
+    def _winners(self, drive, inplace=False):
+        """(N, 2, winners) winning cell of each sub-codebook, sorted (numpy int64). inplace: may overwrite `drive`."""
+        theta = torch.from_numpy(self.theta)
+        d = (drive.sub_(theta) if inplace else drive - theta).view(len(drive), 2, self.units)
         if self.winners == 1:
             return d.argmax(2)[..., None].numpy()
         return d.topk(self.winners, dim=2).indices.sort(dim=2).values.numpy()
 
-    def bucket_keys(self, tokens, chunk=1 << 15):
+    def bucket_keys(self, tokens, chunk=1 << 11):
         """(N,) uint64 bucket id of each history; injective for one winner per sub-codebook."""
         out = np.empty(len(tokens), dtype=np.uint64)
         for s in range(0, len(tokens), chunk):
-            win = self._winners(self._drive(tokens[s:s + chunk])).astype(np.uint64)
+            win = self._winners(self._drive(tokens[s:s + chunk]), inplace=True).astype(np.uint64)
             if self.winners == 1:
                 out[s:s + chunk] = win[:, 0, 0] * np.uint64(self.units) + win[:, 1, 0]
             else:
@@ -209,3 +213,39 @@ def bucket_table(tokens, k, eot, keyfn, c_min=1, parts=16, chunk=C.CHUNK, merge_
     if acc is None:
         raise ValueError("no history in the corpus")
     return C.build_from_groups([C.group_weighted(*acc)], k, c_min)
+
+
+def save_buckets(directory, tables, kind, eot, hashes=None, codes=None, freq=None, n_buckets=None):
+    """Write bucket tables (keyed by history length) and what a reader needs to hash new histories:
+    for 'kenyon' the calibrated hashes and the codes, for 'random' the bucket count."""
+    d = Path(directory)
+    d.mkdir(parents=True, exist_ok=True)
+    for k, table in tables.items():
+        C.save(table, d / f"order{k + 1}", {"c_min": 1, "eot_id": eot, "kind": kind})
+    if kind == "kenyon":
+        for k, h in hashes.items():
+            h.save(d / f"hash_k{k}.npz")
+        np.savez(d / "codes.npz", codes=codes, freq=freq)
+    elif kind != "random":
+        raise ValueError(f"unknown bucket kind {kind!r}")
+    (d / "bucket.json").write_text(json.dumps({"kind": kind, "orders": sorted(tables), "eot_id": eot,
+                                               "n_buckets": n_buckets}, indent=2) + "\n")
+
+
+def load_buckets(directory):
+    """{history length: (bucket table, keyfn)} for CountReader(buckets=...)."""
+    d = Path(directory)
+    info = json.loads((d / "bucket.json").read_text())
+    out = {}
+    if info["kind"] == "kenyon":
+        z = np.load(d / "codes.npz")
+    for k in info["orders"]:
+        table = C.load(d / f"order{k + 1}")[0]
+        if info["kind"] == "random":
+            n = info["n_buckets"]
+            fn = lambda packed, toks, n=n: hash_bucket(packed, n)
+        else:
+            h = KenyonHash.load(d / f"hash_k{k}.npz", z["codes"], z["freq"])
+            fn = lambda packed, toks, h=h: h.bucket_keys(toks)
+        out[k] = (table, exclude_eot(fn, info["eot_id"]))
+    return out

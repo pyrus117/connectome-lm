@@ -161,3 +161,43 @@ def test_distinct_winner_pairs_get_distinct_buckets():
     win = h._winners(h._drive(tokens))[:, :, 0]
     pairs = {tuple(p) for p in win.tolist()}
     assert len(pairs) > 100 and len(set(h.bucket_keys(tokens).tolist())) == len(pairs)
+
+
+@pytest.mark.parametrize("kind", ["kenyon", "random"])
+def test_saved_buckets_reload_to_the_same_tables_and_keys(tmp_path, kind):
+    stream = corpus(seed=6, n_docs=150, vocab=12)
+    codes = clustered_codes(n_clusters=6, per=2)
+    freq = np.ones(len(codes))
+    hashes, tables, fns = {}, {}, {}
+    for k in (2, 3):
+        if kind == "kenyon":
+            hashes[k] = K.KenyonHash(codes, k, units=16, token_freq=freq, seed=1)
+            fns[k] = K.exclude_eot(lambda packed, toks, h=hashes[k]: h.bucket_keys(toks), EOT)
+        else:
+            fns[k] = K.exclude_eot(lambda packed, toks: K.hash_bucket(packed, 64), EOT)
+        tables[k] = K.bucket_table(stream, k, EOT, fns[k], c_min=1, parts=2)
+    K.save_buckets(tmp_path, tables, kind, EOT, hashes=hashes, codes=codes, freq=freq, n_buckets=64)
+    loaded = K.load_buckets(tmp_path)
+    assert sorted(loaded) == [2, 3]
+    probe = np.random.default_rng(0).integers(0, 12, (40, 3)).astype(np.int64)
+    for k in (2, 3):
+        assert as_dict(loaded[k][0]) == as_dict(tables[k])
+        packed = np.array([C.pack_history(r[:k]) for r in probe], dtype=np.uint64)
+        assert np.array_equal(loaded[k][1](packed, probe[:, :k]), fns[k](packed, probe[:, :k]))
+
+
+def test_unknown_bucket_kind_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="kind"):
+        K.save_buckets(tmp_path, {}, "mystery", EOT)
+
+
+def test_the_fused_gather_gives_the_drive_and_buckets_of_the_plain_sum():
+    """The fused embedding_bag path was a speed-up only: same drive to float rounding, same buckets."""
+    codes = clustered_codes()
+    h = K.KenyonHash(codes, k=3, units=32, seed=7)
+    h.calibrate(np.random.default_rng(1).integers(0, len(codes), (2000, 3)))
+    tokens = np.random.default_rng(3).integers(0, len(codes), (500, 3))
+    plain = sum(h.table[j][tokens[:, j]] for j in range(3)) / np.sqrt(h.norm2[tokens].sum(1)).clip(min=1e-6)[:, None]
+    assert np.allclose(h.activation(tokens), plain, rtol=1e-5, atol=1e-6)
+    win = (plain - h.theta).reshape(500, 2, 32).argmax(2).astype(np.uint64)
+    assert np.array_equal(h.bucket_keys(tokens), win[:, 0] * np.uint64(32) + win[:, 1])
