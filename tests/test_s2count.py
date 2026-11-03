@@ -7,6 +7,8 @@ import torch
 
 import clm.s2train as S
 from clm import counts as C
+from clm import kenyon as K
+from clm.countread import CountReader
 from clm.s2model import B0Config, build_b0
 from clm.s2train import S2TrainConfig, run
 
@@ -127,12 +129,12 @@ def test_validation_reads_counts_without_leave_one_out_and_training_reads_them_w
     occurrence' would corrupt the read. Only training windows get leave-one-out."""
     tcfg, tmp = setup
     calls = []
-    real = S.CountReader.lookup
+    real = CountReader.lookup
 
     def spy(self, x, y=None):
         calls.append(y is not None)
         return real(self, x, y)
-    monkeypatch.setattr(S.CountReader, "lookup", spy)
+    monkeypatch.setattr(CountReader, "lookup", spy)
     run("T", 0, TINY, tcfg, tmp / "r", CPU)
     log = [json.loads(l) for l in (tmp / "r" / "log.jsonl").read_text().splitlines()]
     n_eval = sum("val_loss" in e for e in log)
@@ -144,3 +146,25 @@ def test_unknown_memory_is_refused(setup):
     tcfg, tmp = setup
     with pytest.raises(ValueError, match="memory"):
         run("T", 0, TINY, S.dataclasses.replace(tcfg, memory="kenyon"), tmp / "x", CPU)
+
+
+def test_a_run_with_bucket_tables_reads_them_and_names_its_arm(setup, monkeypatch):
+    tcfg, tmp = setup
+    stream = np.fromfile(tmp / "train.bin", dtype=np.uint16)
+    fn = K.exclude_eot(lambda packed, toks: K.hash_bucket(packed, 50), EOT)
+    tables = {k: K.bucket_table(stream, k, EOT, fn, c_min=1, parts=2) for k in (2, 3)}
+    K.save_buckets(tmp / "buckets", tables, "random", EOT, n_buckets=50)
+    filled = {}
+    real = CountReader.lookup
+
+    def spy(self, x, y=None):
+        tok, score = real(self, x, y)
+        filled.setdefault((tag, y is not None), []).append(int((score > 0).sum()))
+        return tok, score
+    monkeypatch.setattr(CountReader, "lookup", spy)
+    for tag, cfg in (("bucket", S.dataclasses.replace(tcfg, bucket_dir=str(tmp / "buckets"))), ("plain", tcfg)):
+        run("T", 0, TINY, cfg, tmp / tag, CPU)
+    arms = [json.loads((tmp / n / "results.json").read_text())["arm"] for n in ("bucket", "plain")]
+    assert arms == ["count_random", "count"]
+    for is_train in (True, False):                                           # training (leave-one-out) and validation
+        assert np.mean(filled[("bucket", is_train)]) > 1.15 * np.mean(filled[("plain", is_train)])

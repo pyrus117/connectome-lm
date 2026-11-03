@@ -16,7 +16,7 @@ from pathlib import Path
 
 import torch
 
-from clm.countread import CountReader, Prefetcher, make_step
+from clm.countread import Prefetcher, make_step, reader_for
 from clm.data import eval_windows, get_batch, open_tokens
 from clm.s2loop import build_loop, sample_depth
 from clm.s2model import B0Config, build_b0, param_groups
@@ -43,6 +43,7 @@ class S2TrainConfig:
     memory: str = "none"          # "none" (B0) or "count" (COUNT read over count_dir)
     count_dir: str = "data/count"
     count_k: int = 8              # continuations read per history
+    bucket_dir: str = ""          # Stage 2B: bucket tables read where an exact history is not stored
     loo: bool = True              # leave-one-out reads while training (validation never needs it)
     prereg: str = "PREREG_stage2_0.md"
     arch: str = "b0"              # "b0", or "loop" (Stage 2D: B0's blocks as prelude, shared loop, coda)
@@ -95,7 +96,10 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     if tcfg.arch == "loop" and tcfg.memory != "none":
         raise ValueError("the looped arch has no memory arm")
     looped = tcfg.arch == "loop"
-    reader = CountReader(ROOT / tcfg.count_dir, tcfg.count_k) if tcfg.memory == "count" else None
+    reader = (reader_for(ROOT / tcfg.count_dir, tcfg.count_k, ROOT / tcfg.bucket_dir if tcfg.bucket_dir else None)
+              if tcfg.memory == "count" else None)
+    bucket_kind = (json.loads((ROOT / tcfg.bucket_dir / "bucket.json").read_text())["kind"]
+                   if reader is not None and tcfg.bucket_dir else None)
     model = (build_loop(mcfg, seed, tcfg.loop_max) if looped else build_b0(mcfg, seed)).to(device)
     opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd)
     steps = tcfg.tokens // (tcfg.batch * mcfg.ctx)
@@ -181,7 +185,8 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     if end < steps:
         return
     commit, dirty = _git()
-    arm = "loop" if looped else "b0" if reader is None else "count" if tcfg.loo else "count_noloo"
+    arm = ("loop" if looped else "b0" if reader is None else f"count_{bucket_kind}" if bucket_kind
+           else "count" if tcfg.loo else "count_noloo")
     _write(out / "results.json", {
         "status": "complete", "arm": arm, "size": size, "seed": seed,
         "model": dataclasses.asdict(mcfg), "train": dataclasses.asdict(tcfg),
@@ -211,12 +216,13 @@ def main():
     ap.add_argument("--tokens", type=int, help="pilot override")
     ap.add_argument("--memory", choices=("none", "count"), help="arm override")
     ap.add_argument("--arch", choices=("b0", "loop"), help="architecture override")
+    ap.add_argument("--bucket-dir", help="Stage 2B: directory of bucket tables read as the COUNT fallback")
     ap.add_argument("--no-loo", action="store_true", help="leakage diagnostic: no leave-one-out while training")
     ap.add_argument("--prereg", help="pre-registration file whose hash the results record")
     args = ap.parse_args()
     mcfg, tcfg = load_config(args.config, args.size)
     overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("tokens", args.tokens),
-                                   ("memory", args.memory), ("prereg", args.prereg), ("arch", args.arch),
+                                   ("memory", args.memory), ("prereg", args.prereg), ("arch", args.arch), ("bucket_dir", args.bucket_dir),
                                    ("loo", False if args.no_loo else None)) if v is not None}
     tcfg = dataclasses.replace(tcfg, **overrides)
     device = torch.device(args.device)

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Run one Stage 2 driver with the GPU to itself (Nate approved 2026-11-02: whole GPU, services
 # stopped, restarted after; 2026-11-03: proceed through the series without stopping between tests).
-#   systemd-run --user --unit=NAME --working-directory=/home/nate/Projects/connectome-lm \
-#     -p MemoryMax=16G /home/nate/Projects/connectome-lm/scripts/night.sh stage2d_driver.py [wait-for-unit]
-# Optional second argument: a systemd user unit to wait for first (the GPU is then free for this job).
-# Only services that were running when the job started are stopped and restarted.
+#   systemd-run --user --unit=NAME -p MemoryMax=16G /path/to/scripts/night.sh stage2c_driver.py [wait-for-unit]
+# Works from whichever checkout it lives in. Optional second argument: a systemd user unit to wait for first
+# (the GPU is then free for this job). Only services that were running when the job started are stopped
+# and restarted.
 set -euo pipefail
-cd /home/nate/Projects/connectome-lm
+cd "$(dirname "$0")/.."
+export PYTHONPATH="$PWD/src"
 DRIVER="$1"
 mkdir -p runs2
 if [ -n "${2:-}" ]; then

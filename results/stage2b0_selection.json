@@ -1,0 +1,9 @@
+{
+  "selected": "K31",
+  "selected_config": {"codes": "ppmi", "in_degree": 31, "winners": 1, "thresholds": true},
+  "rule": "PREREG_stage2b0.md section 3: the Kenyon configuration with PPMI codes and the lowest held-out rare loss, applied to the configurations whose bucket tables fit this machine",
+  "reason": "The rule applied to all configurations selected winners2 (rare loss 5.09684). Its tables hold about one bucket per distinct history: 4.4M, 26.7M and 55.5M buckets at histories of 2, 3 and 4 tokens in the 100M-token sweep, and 10.2M and 104.6M buckets at the first two orders of the 871M-token final run, where the order-5 table was OOM-killed at 14 GB (2026-11-03 18:07). The network arm (Stage 2B) needs the whole table in host memory for every training position, which this machine cannot hold for such a table. Feasibility was therefore added to the rule: only configurations with at most 5M buckets at the longest history length (the winners=1 family: 0.4M to 3.1M buckets) are eligible. Among them K31 has the lowest rare loss (5.10096; K15 5.10099, default 5.10116).",
+  "feasible_rows": {"default": 5.10116, "K1": 5.10616, "K3": 5.10275, "K7": 5.10119, "K15": 5.10099, "K31": 5.10096, "thresholds_off": 5.10242},
+  "excluded_rows": {"winners2": 5.09684, "winners4": 5.10119},
+  "decided": "2026-11-03, before any validation score of the final stage existed (the killed run had scored the exact model on validation only)"
+}

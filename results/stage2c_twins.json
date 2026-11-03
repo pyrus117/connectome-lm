@@ -1,0 +1,100 @@
+{
+  "prereg_sha256": "f43215cfb2cb4205627309537633d33daef2684594b105c940c40dd782f3580f",
+  "write_weight": 4.0,
+  "pairs": 384,
+  "runs": {
+    "0": {
+      "exact": {
+        "discrimination_both_written": 0.7734375,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.7916666666666666,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": null,
+        "random_pairs_control_recall": 0.8307291666666666
+      },
+      "token_hash": {
+        "discrimination_both_written": 0.7734375,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.7916666666666666,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0
+      },
+      "kenyon": {
+        "discrimination_both_written": 0.7734375,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.036458333333333336,
+        "stored_twin_recall_when_only_one_is_written": 0.7916666666666666,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0625
+      },
+      "kenyon_random_codes": {
+        "discrimination_both_written": 0.7734375,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.7916666666666666,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0
+      }
+    },
+    "1": {
+      "exact": {
+        "discrimination_both_written": 0.8385416666666666,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.7552083333333334,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": null,
+        "random_pairs_control_recall": 0.7291666666666666
+      },
+      "token_hash": {
+        "discrimination_both_written": 0.8385416666666666,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.7552083333333334,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0
+      },
+      "kenyon": {
+        "discrimination_both_written": 0.8463541666666666,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.03125,
+        "stored_twin_recall_when_only_one_is_written": 0.765625,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0625
+      },
+      "kenyon_random_codes": {
+        "discrimination_both_written": 0.8385416666666666,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.7552083333333334,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0
+      }
+    },
+    "2": {
+      "exact": {
+        "discrimination_both_written": 0.7578125,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.78125,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": null,
+        "random_pairs_control_recall": 0.7734375
+      },
+      "token_hash": {
+        "discrimination_both_written": 0.7578125,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.78125,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0
+      },
+      "kenyon": {
+        "discrimination_both_written": 0.7578125,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.020833333333333332,
+        "stored_twin_recall_when_only_one_is_written": 0.7760416666666666,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0625
+      },
+      "kenyon_random_codes": {
+        "discrimination_both_written": 0.7578125,
+        "twin_gets_stored_twins_answer_when_only_one_is_written": 0.0,
+        "stored_twin_recall_when_only_one_is_written": 0.78125,
+        "twin_gets_its_own_answer_when_only_one_is_written": 0.0,
+        "twin_bucket_collision_rate": 0.0
+      }
+    }
+  }
+}
