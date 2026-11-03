@@ -227,6 +227,23 @@ MUTANTS = [
      "tests/test_kenyon.py::test_the_number_of_shards_changes_nothing_even_for_skewed_or_hashed_keys"),
     ("M86", "src/clm/kenyon.py", "h.theta[:] = z[\"theta\"]", "pass",
      "tests/test_kenyon.py::test_a_saved_hash_reloads_to_the_same_buckets"),
+    ("M90", "src/clm/consolidate_fix.py", 'teacher = original if teacher_mode == "original" else _frozen_copy(model)',
+     "teacher = _frozen_copy(model)",
+     "tests/test_consolidate_fix.py::test_the_original_teacher_stays_clean_while_the_rolling_teacher_follows_the_student"),
+    ("M91", "src/clm/consolidate_fix.py", "model.head.weight.requires_grad_(not freeze_head)",
+     "model.head.weight.requires_grad_(True)",
+     "tests/test_consolidate_fix.py::test_freezing_the_head_leaves_it_bit_identical_and_trains_everything_else"),
+    ("M92", "src/clm/consolidate_fix.py", "teacher_matrix.append([quiz(teacher, reader, overlay, qx, qy",
+     "teacher_matrix.append([quiz(teacher, reader, None, qx, qy",
+     "tests/test_consolidate_fix.py::test_the_teacher_matrix_is_the_original_model_reading_the_memory"),
+    ("M93", "src/clm/consolidate_fix.py", "    finally:\n        model.head.weight.requires_grad_(True)",
+     "    finally:\n        pass",
+     "tests/test_consolidate_fix.py::test_a_bad_teacher_mode_is_refused_and_a_crash_leaves_the_head_trainable"),
+    ("M94", "src/clm/consolidate_fix.py", "if teacher_mode not in TEACHER_MODES:", "if False:",
+     "tests/test_consolidate_fix.py::test_a_bad_teacher_mode_is_refused_and_a_crash_leaves_the_head_trainable"),
+    ("M95", "src/clm/consolidate_fix.py", "a_logits = _forward(original, reader, None, ax, device)",
+     "a_logits = _forward(model, reader, None, ax, device)",
+     "tests/test_consolidate_fix.py::test_the_default_variant_reproduces_the_registered_consolidation_exactly"),
 ]
 
 
