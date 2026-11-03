@@ -194,25 +194,53 @@ def unpack(packed, k):
     return ((packed[:, None] >> shifts) & np.uint64((1 << C.VOCAB_BITS) - 1)).astype(np.int64)
 
 
-def bucket_table(tokens, k, eot, keyfn, c_min=1, parts=16, chunk=C.CHUNK, merge_every=4):
-    """Count table keyed by bucket: the continuation counts of every history in a bucket, pooled.
-    keyfn(packed, tokens) -> (N,) uint64 bucket of each distinct history."""
-    acc = None
+_RECORD = np.dtype([("bucket", "<u8"), ("token", "<u2"), ("count", "<u4")])
 
-    def reduce(triples):
-        group = C.group_weighted(*triples)
-        hist, hcount, fanout, entry_hist, tok, cnt = group
-        return hist[entry_hist], tok, cnt
 
-    for n, (hist, hcount, fanout, entry_hist, tok, cnt) in enumerate(C._partitions(tokens, k, eot, parts, chunk)):
-        buckets = keyfn(hist, unpack(hist, k))
-        part = (buckets[entry_hist], tok, cnt)
-        acc = part if acc is None else tuple(np.concatenate(pair) for pair in zip(acc, part))
-        if (n + 1) % merge_every == 0:
-            acc = reduce(acc)
-    if acc is None:
-        raise ValueError("no history in the corpus")
-    return C.build_from_groups([C.group_weighted(*acc)], k, c_min)
+def bucket_table(tokens, k, eot, keyfn, c_min=1, parts=16, chunk=C.CHUNK, shards=32, spill_dir=None):
+    """Count table keyed by bucket: the continuation counts of every distinct history in a bucket, pooled.
+    keyfn(packed, tokens) -> (N,) uint64 bucket of each distinct history.
+
+    Pooling all entries at once needs more memory than a laptop has at full scale. So each partition's
+    (bucket, continuation, count) entries are routed to `shards` spill files by bucket-key range (cut points
+    from the first partition's keys), and one shard is pooled at a time. Shards are ascending key ranges, so
+    the pooled rows come out in key order. Spill files go under `spill_dir` (default <repo>/data/spill, on
+    disk: the system temp dir is RAM-backed here) and are removed as they are read."""
+    import tempfile
+    spill_dir = Path(spill_dir) if spill_dir else Path(__file__).resolve().parents[2] / "data" / "spill"
+    spill_dir.mkdir(parents=True, exist_ok=True)
+    cuts = None
+    with tempfile.TemporaryDirectory(dir=spill_dir) as tmp:
+        paths = [Path(tmp) / f"shard{i}.bin" for i in range(shards)]
+        files = [open(p, "wb") for p in paths]
+        try:
+            for hist, hcount, fanout, entry_hist, tok, cnt in C._partitions(tokens, k, eot, parts, chunk):
+                buckets = keyfn(hist, unpack(hist, k))[entry_hist]
+                if cuts is None:
+                    sample = np.sort(buckets[::max(1, buckets.size // 200_000)])
+                    cuts = sample[(np.arange(1, shards) * sample.size) // shards]
+                shard = np.searchsorted(cuts, buckets, side="right")
+                order = np.argsort(shard, kind="stable")
+                rec = np.empty(buckets.size, dtype=_RECORD)
+                rec["bucket"], rec["token"], rec["count"] = buckets[order], tok[order], cnt[order]
+                edges = np.concatenate([[0], np.cumsum(np.bincount(shard, minlength=shards))])
+                for i in range(shards):
+                    if edges[i + 1] > edges[i]:
+                        rec[edges[i]:edges[i + 1]].tofile(files[i])
+        finally:
+            for f in files:
+                f.close()
+        if cuts is None:
+            raise ValueError("no history in the corpus")
+
+        def pooled_shards():
+            for path in paths:
+                if path.stat().st_size == 0:
+                    continue
+                rec = np.fromfile(path, dtype=_RECORD)
+                path.unlink()
+                yield C.group_weighted(rec["bucket"], rec["token"], rec["count"])
+        return C.build_from_groups(pooled_shards(), k, c_min)
 
 
 def save_buckets(directory, tables, kind, eot, hashes=None, codes=None, freq=None, n_buckets=None):

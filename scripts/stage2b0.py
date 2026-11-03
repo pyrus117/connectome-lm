@@ -190,9 +190,13 @@ def prepare(universe_tokens, parts, streams, cache_name):
 def sweep(args):
     prereg_sha()
     d = prepare(args.universe_tokens or 100_000_000, args.parts, ("held",), "sweep")
-    rows = []
+    path = OUT / "stage2b0_sweep.json"
+    rows = json.loads(path.read_text())["rows"] if args.resume and path.exists() else []
+    rows = [r for r in rows if r["kind"] == "kenyon"]
     for name, over in SWEEP:
         if args.only and name not in args.only:
+            continue
+        if name in {r["name"] for r in rows}:
             continue
         cfg = {**DEFAULT, **over}
         row = summarise(run_config(name, cfg, "kenyon", d), d)
@@ -248,6 +252,7 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--eval-tokens", type=int, default=N_EVAL, help="tokens scored per stream (smoke tests only)")
     ap.add_argument("--only", nargs="*", help="run only these sweep configurations (smoke tests only)")
+    ap.add_argument("--resume", action="store_true", help="sweep: keep the rows already in the result file")
     ap.add_argument("--out", default="results", help="directory for the result files")
     args = ap.parse_args()
     N_EVAL, OUT = args.eval_tokens, ROOT / args.out

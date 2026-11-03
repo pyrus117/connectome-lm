@@ -125,8 +125,9 @@ def pooled(stream, k, bucket_of, c_min):
 def test_bucket_table_pools_continuation_counts_across_the_histories_in_a_bucket(k):
     t = corpus(seed=4, n_docs=200, vocab=14)
     keyfn = lambda packed, toks: (toks.sum(1) % 5).astype(np.uint64)
-    table = K.bucket_table(t, k, EOT, keyfn, c_min=1, parts=3, chunk=89, merge_every=2)
+    table = K.bucket_table(t, k, EOT, keyfn, c_min=1, parts=3, chunk=89, shards=4)
     assert as_dict(table) == pooled(t, k, lambda h: sum(h) % 5, 1)
+    assert np.all(table.keys[1:] > table.keys[:-1])
 
 
 def test_bucket_table_with_the_identity_key_is_the_exact_table():
@@ -201,3 +202,14 @@ def test_the_fused_gather_gives_the_drive_and_buckets_of_the_plain_sum():
     assert np.allclose(h.activation(tokens), plain, rtol=1e-5, atol=1e-6)
     win = (plain - h.theta).reshape(500, 2, 32).argmax(2).astype(np.uint64)
     assert np.array_equal(h.bucket_keys(tokens), win[:, 0] * np.uint64(32) + win[:, 1])
+
+
+def test_the_number_of_shards_changes_nothing_even_for_skewed_or_hashed_keys():
+    t = corpus(seed=7, n_docs=250, vocab=14)
+    skewed = lambda packed, toks: np.where(toks[:, 0] < 3, 0, toks.sum(1)).astype(np.uint64)         # one huge bucket
+    hashed = lambda packed, toks: K.hash_bucket(packed, 2**40) * np.uint64(1 << 20)                  # spread over 64 bits
+    for fn in (skewed, hashed):
+        ref = K.bucket_table(t, 3, EOT, fn, c_min=1, parts=2, shards=1)
+        for shards in (2, 7, 40):
+            got = K.bucket_table(t, 3, EOT, fn, c_min=1, parts=3, chunk=71, shards=shards)
+            assert as_dict(got) == as_dict(ref) and np.all(got.keys[1:] > got.keys[:-1])

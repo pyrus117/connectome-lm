@@ -170,7 +170,7 @@ MUTANTS = [
      "tests/test_kenyon.py::test_hash_bucket_is_deterministic_in_range_and_spread"),
     ("M65", "src/clm/kenyon.py", "np.arange(k - 1, -1, -1, dtype=np.uint64)", "np.arange(k, dtype=np.uint64)",
      "tests/test_kenyon.py::test_unpack_inverts_pack_history"),
-    ("M66", "src/clm/kenyon.py", "part = (buckets[entry_hist], tok, cnt)", "part = (buckets[np.zeros_like(entry_hist)], tok, cnt)",
+    ("M66", "src/clm/kenyon.py", "buckets = keyfn(hist, unpack(hist, k))[entry_hist]", "buckets = keyfn(hist, unpack(hist, k))[np.zeros_like(entry_hist)]",
      "tests/test_kenyon.py::test_bucket_table_pools_continuation_counts_across_the_histories_in_a_bucket"),
     ("M67", "src/clm/kenyon.py", "keys[(tokens == eot).any(axis=1)] = NO_BUCKET", "keys[(tokens == eot).all(axis=1)] = NO_BUCKET",
      "tests/test_kenyon.py::test_a_history_holding_end_of_text_gets_no_bucket"),
@@ -223,6 +223,8 @@ MUTANTS = [
      "tests/test_fastwrite.py::test_language_loss_reads_the_memory_when_asked"),
     ("M88", "src/clm/fastwrite.py", "ans = self._answers(np.asarray(x))", "ans = self._answers(np.roll(np.asarray(x), 1, axis=1))",
      "tests/test_fastwrite.py::test_count_input_gains_one_slot_that_carries_the_answer_at_cue_positions"),
+    ("M89", "src/clm/kenyon.py", "shard = np.searchsorted(cuts, buckets, side=\"right\")", "shard = (buckets % np.uint64(shards)).astype(np.int64)",
+     "tests/test_kenyon.py::test_the_number_of_shards_changes_nothing_even_for_skewed_or_hashed_keys"),
     ("M86", "src/clm/kenyon.py", "h.theta[:] = z[\"theta\"]", "pass",
      "tests/test_kenyon.py::test_a_saved_hash_reloads_to_the_same_buckets"),
 ]
