@@ -265,6 +265,18 @@ MUTANTS = [
      "tests/test_s2count.py::test_a_fresh_gated_model_reads_exactly_as_the_ungated_one"),
     ("M108", "src/clm/s2train.py", '+ ("_gated" if tcfg.count_gate else "")', '+ ""',
      "tests/test_s2count.py::test_a_gated_run_trains_its_gates_and_reports_them"),
+    # Stage 2E decision rules (src/clm/rules2e.py)
+    ("M109", "src/clm/rules2e.py", 'gap(classes, "gated", "count", "not stored") <= -CLASS_EFFECT',
+     'gap(classes, "gated", "count", "not stored") <= CLASS_EFFECT',
+     "tests/test_rules2e.py::test_p10a_needs_a_not_stored_gain_and_no_cost_in_any_stored_class"),
+    ("M110", "src/clm/rules2e.py", 'all(gap(classes, "gated", "count", lab) < CLASS_EFFECT for lab in STORED)', "True",
+     "tests/test_rules2e.py::test_p10a_needs_a_not_stored_gain_and_no_cost_in_any_stored_class"),
+    ("M111", "src/clm/rules2e.py", 'gap(classes, "kenyon", "gated", "not stored")', 'gap(classes, "kenyon", "count", "not stored")',
+     "tests/test_rules2e.py::test_p11_compares_kenyon_with_the_gated_read_not_with_count"),
+    ("M112", "src/clm/rules2e.py", "and abs(mean_d(loss, x, y)) < 2 * SESOI)", "and True)",
+     "tests/test_rules2e.py::test_five_seed_rule"),
+    ("M113", "src/clm/rules2e.py", 'verdict(loss["kenyon"], loss["gated"]) == "X_BETTER" or p11(classes)', "p11(classes)",
+     "tests/test_rules2e.py::test_the_random_control_runs_only_when_there_is_a_kenyon_gain_to_attribute"),
 ]
 
 

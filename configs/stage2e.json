@@ -1,0 +1,22 @@
+{
+  "sizes": {
+    "M": {"vocab": 8192, "ctx": 512, "d_model": 384, "n_layer": 6, "n_head": 6}
+  },
+  "train": {
+    "tokens": 200000000,
+    "batch": 32,
+    "micro": 8,
+    "optimizer": "muon",
+    "lr": 0.008,
+    "wd": 0.1,
+    "warmup": 200,
+    "eval_every": 2000,
+    "eval_tokens": 2097152,
+    "ckpt_every": 500,
+    "memory": "count",
+    "count_dir": "data/count",
+    "count_k": 8,
+    "loo": true,
+    "prereg": "PREREG_stage2e.md"
+  }
+}
