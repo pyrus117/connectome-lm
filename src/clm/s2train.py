@@ -34,6 +34,7 @@ class S2TrainConfig:
     micro: int = 8
     optimizer: str = "adamw"
     lr: float = 2e-3
+    adam_mult: float = 1.0        # embeddings, head and gates train at adam_mult x lr (Stage 2F); 1.0 = one shared rate
     wd: float = 0.1
     warmup: int = 200
     clip: float = 1.0
@@ -108,7 +109,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     bucket_kind = (json.loads((ROOT / tcfg.bucket_dir / "bucket.json").read_text())["kind"]
                    if reader is not None and tcfg.bucket_dir else None)
     model = (build_loop(mcfg, seed, tcfg.loop_max) if looped else build_b0(mcfg, seed)).to(device)
-    opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd)
+    opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd, tcfg.adam_mult)
     steps = tcfg.tokens // (tcfg.batch * mcfg.ctx)
     if tcfg.batch % tcfg.micro:
         raise ValueError("batch must be a multiple of micro")
@@ -136,7 +137,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             lr = lr_at(step, steps, tcfg)
             for o in opts:
                 for g in o.param_groups:
-                    g["lr"] = lr
+                    g["lr"] = lr * g.get("lr_mult", 1.0)
             data = prefetch.get(step)
             if data.step != step:
                 raise RuntimeError(f"prefetch handed over step {data.step} for step {step}")
@@ -223,6 +224,7 @@ def main():
     ap.add_argument("--optimizer", help="pilot override")
     ap.add_argument("--lr", type=float, help="pilot override")
     ap.add_argument("--tokens", type=int, help="pilot override")
+    ap.add_argument("--adam-mult", type=float, help="Stage 2F: AdamW-group rate as a multiple of --lr")
     ap.add_argument("--memory", choices=("none", "count"), help="arm override")
     ap.add_argument("--arch", choices=("b0", "loop"), help="architecture override")
     ap.add_argument("--bucket-dir", help="Stage 2B: directory of bucket tables read as the COUNT fallback")
@@ -231,7 +233,7 @@ def main():
     ap.add_argument("--prereg", help="pre-registration file whose hash the results record")
     args = ap.parse_args()
     mcfg, tcfg = load_config(args.config, args.size)
-    overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("tokens", args.tokens),
+    overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("adam_mult", args.adam_mult), ("tokens", args.tokens),
                                    ("memory", args.memory), ("prereg", args.prereg), ("arch", args.arch), ("bucket_dir", args.bucket_dir),
                                    ("loo", False if args.no_loo else None),
                                    ("count_gate", True if args.count_gate else None)) if v is not None}

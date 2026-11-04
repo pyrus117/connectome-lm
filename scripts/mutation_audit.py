@@ -277,6 +277,25 @@ MUTANTS = [
      "tests/test_rules2e.py::test_five_seed_rule"),
     ("M113", "src/clm/rules2e.py", 'verdict(loss["kenyon"], loss["gated"]) == "X_BETTER" or p11(classes)', "p11(classes)",
      "tests/test_rules2e.py::test_the_random_control_runs_only_when_there_is_a_kenyon_gain_to_attribute"),
+    # Stage 2F: separate Muon and AdamW rates (src/clm/s2model.py, s2train.py, rules2f.py)
+    ("M114", "src/clm/s2model.py", '"lr": lr * adam_mult, "lr_mult": adam_mult}', '"lr": lr, "lr_mult": adam_mult}',
+     "tests/test_s2lr.py::test_the_adam_group_runs_at_the_multiple_and_muon_at_the_base_rate"),
+    ("M115", "src/clm/s2model.py", "torch.optim.Muon(matrices, lr=lr, weight_decay=wd", "torch.optim.Muon(matrices, lr=lr * adam_mult, weight_decay=wd",
+     "tests/test_s2lr.py::test_the_adam_group_runs_at_the_multiple_and_muon_at_the_base_rate"),
+    ("M116", "src/clm/s2train.py", 'g["lr"] = lr * g.get("lr_mult", 1.0)', 'g["lr"] = lr',
+     "tests/test_s2lr.py::test_every_step_scales_the_adam_group_by_the_multiple"),
+    ("M117", "src/clm/s2train.py", '("adam_mult", args.adam_mult), ', "",
+     "tests/test_s2lr.py::test_the_command_line_multiple_reaches_the_training_config"),
+    ("M118", "src/clm/rules2f.py", "return min(finite, key=finite.get) if finite else None", "return max(finite, key=finite.get) if finite else None",
+     "tests/test_rules2f.py::test_the_best_cell_is_the_lowest_loss_and_a_diverged_cell_is_skipped"),
+    ("M119", "src/clm/rules2f.py", "out.append((m / 2, a))", "out.append((m * 2, a))",
+     "tests/test_rules2f.py::test_a_winner_on_an_edge_gets_one_step_past_that_edge_unless_already_tried"),
+    ("M120", "src/clm/rules2f.py", "return [c for c in out if c not in tried]", "return out",
+     "tests/test_rules2f.py::test_a_winner_on_an_edge_gets_one_step_past_that_edge_unless_already_tried"),
+    ("M121", "src/clm/rules2f.py", "scores[shared] - scores[win] >= SESOI", "scores[shared] - scores[win] > 0",
+     "tests/test_rules2f.py::test_confirmation_needs_a_separate_rate_cell_to_beat_every_shared_rate_cell_by_the_sesoi"),
+    ("M122", "src/clm/rules2f.py", "best({c: v for c, v in scores.items() if coupled(c)})", "best({c: v for c, v in scores.items() if c in ((32e-3, 32e-3),)})",
+     "tests/test_rules2f.py::test_confirmation_needs_a_separate_rate_cell_to_beat_every_shared_rate_cell_by_the_sesoi"),
 ]
 
 

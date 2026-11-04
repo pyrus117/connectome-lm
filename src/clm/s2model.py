@@ -196,13 +196,14 @@ class HeadMuon(torch.optim.Muon):
         return loss
 
 
-def param_groups(model, optimizer, lr, wd):
+def param_groups(model, optimizer, lr, wd, adam_mult=1.0):
     """Muon takes the 2-D block matrices; AdamW takes embeddings, head and gates.
-    With AdamW alone, block matrices get weight decay and the rest none."""
+    With AdamW alone, block matrices get weight decay and the rest none.
+    The rest runs at adam_mult x lr; s2train multiplies each step's rate by the group's lr_mult."""
     matrices, rest = [], []
     for name, p in model.named_parameters():
         (matrices if name.startswith("blocks.") and p.dim() == 2 else rest).append(p)
-    adam_rest = {"params": rest, "weight_decay": 0.0, "lr": lr}
+    adam_rest = {"params": rest, "weight_decay": 0.0, "lr": lr * adam_mult, "lr_mult": adam_mult}
     if optimizer == "adamw":
         return [torch.optim.AdamW([{"params": matrices, "weight_decay": wd, "lr": lr}, adam_rest],
                                   betas=(0.9, 0.95), fused=False)]
