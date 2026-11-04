@@ -67,3 +67,10 @@ resumed run is not bit-identical to an uninterrupted one (bf16 on GPU), which is
 lines written after the checkpoint are kept in `runs2/count_gated-M-2/log.pre-restart-tail.jsonl`; the NUL-filled last line
 from the crash was dropped and `log.jsonl` was cut to steps 0-8999 so no step is logged twice (`RESTART.txt` in that folder).
 `embeddinggemma.service` had restarted itself on boot and was stopped again for the remaining runs.
+
+## 2026-11-05, Stage 2F, crash fix: analysis read a key Stage 2A's runs do not have
+
+All Stage 2F runs finished (05:43 NZDT). `scripts/stage2f_analyze.py` then crashed with `KeyError: 'adam_mult'` on the check that
+Stage 2A's COUNT runs used one shared rate: their `results.json` predates the `adam_mult` setting. Fix (commit 45c17a5): read it
+with `.get("adam_mult", 1.0)`. No run, config, pre-registered rule or result was touched; the analysis was rerun by hand and wrote
+`results/stage2f.json`. The driver stopped at the crash, so it did not print its final VERDICT line.
