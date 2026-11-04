@@ -34,7 +34,7 @@ def main():
     for s, r in runs["decoupled"].items():
         if {k: r["train"][k] for k in want} != want:
             sys.exit(f"seed {s} decoupled run trained at {r['train']['lr']}, x{r['train']['adam_mult']}, not {want}")
-    if {r["train"]["adam_mult"] for r in runs["count"].values()} != {1.0}:
+    if {r["train"].get("adam_mult", 1.0) for r in runs["count"].values()} != {1.0}:       # Stage 2A runs predate the key
         sys.exit("a COUNT run has a separate Adam rate")
     loss = {a: {s: r["final_val_loss"] for s, r in rs.items()} for a, rs in runs.items()}
     v = verdict(loss["decoupled"], loss["count"])
