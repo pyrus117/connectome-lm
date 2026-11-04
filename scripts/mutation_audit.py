@@ -296,6 +296,15 @@ MUTANTS = [
      "tests/test_rules2f.py::test_confirmation_needs_a_separate_rate_cell_to_beat_every_shared_rate_cell_by_the_sesoi"),
     ("M122", "src/clm/rules2f.py", "best({c: v for c, v in scores.items() if coupled(c)})", "best({c: v for c, v in scores.items() if c in ((32e-3, 32e-3),)})",
      "tests/test_rules2f.py::test_confirmation_needs_a_separate_rate_cell_to_beat_every_shared_rate_cell_by_the_sesoi"),
+    # Stage 2G: B0 on separate rates (src/clm/rules2g.py)
+    ("M123", "src/clm/rules2g.py", "return min(finite, key=finite.get) if finite else None", "return max(finite, key=finite.get) if finite else None",
+     "tests/test_rules2g.py::test_the_best_rate_is_the_lowest_loss_and_a_diverged_rate_is_skipped"),
+    ("M124", "src/clm/rules2g.py", "return [win * 2] if", "return [win / 2] if",
+     "tests/test_rules2g.py::test_a_winner_on_the_top_edge_gets_one_higher_rate_once"),
+    ("M125", "src/clm/rules2g.py", "and win * 2 not in tried else []", "else []",
+     "tests/test_rules2g.py::test_a_winner_on_the_top_edge_gets_one_higher_rate_once"),
+    ("M126", "src/clm/rules2g.py", "shared - scores[win] >= SESOI", "shared - scores[win] > 0",
+     "tests/test_rules2g.py::test_b0_is_rerun_only_when_a_higher_adam_rate_beats_the_shared_rate_by_the_sesoi"),
 ]
 
 
