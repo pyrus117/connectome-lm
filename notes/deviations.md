@@ -57,3 +57,13 @@ notes/stage2b0_result_2026-11-03.md) and the plan's rule was to write up instead
 (2026-11-03, evening) to run Stage 2B anyway. This is a decision to run, not a change to the registered design: the arms,
 settings, metric and decision rules in PREREG_stage2b.md are unchanged, and the amendment note at its top says so. The result
 is reported as "run despite a failed gate".
+
+## 2026-11-04, Stage 2E: forced machine restart, one run resumed from its checkpoint
+
+The laptop was restarted at 18:28 NZDT while `runs2/count_gated-M-2` was at about step 9,257 of 12,207. The driver was
+restarted with the same command; the run resumed from its step-9000 checkpoint (data order depends only on seed and step, so the
+batches repeat). No code, config or data changed and the working tree stayed clean. About 257 steps were redone. The
+resumed run is not bit-identical to an uninterrupted one (bf16 on GPU), which is the usual run-to-run noise. The 257 log
+lines written after the checkpoint are kept in `runs2/count_gated-M-2/log.pre-restart-tail.jsonl`; the NUL-filled last line
+from the crash was dropped and `log.jsonl` was cut to steps 0-8999 so no step is logged twice (`RESTART.txt` in that folder).
+`embeddinggemma.service` had restarted itself on boot and was stopped again for the remaining runs.
