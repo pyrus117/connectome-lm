@@ -305,6 +305,27 @@ MUTANTS = [
      "tests/test_rules2g.py::test_a_winner_on_the_top_edge_gets_one_higher_rate_once"),
     ("M126", "src/clm/rules2g.py", "shared - scores[win] >= SESOI", "shared - scores[win] > 0",
      "tests/test_rules2g.py::test_b0_is_rerun_only_when_a_higher_adam_rate_beats_the_shared_rate_by_the_sesoi"),
+    # Stage 2C-3: memory-on consolidation consistency and context-gated overlay writes (src/clm/consolidate_fix.py)
+    ("M127", "src/clm/consolidate_fix.py", "keep = (self.reader.history_counts(x, self.gate_k) <= self.max_hcount)[..., None]",
+     "keep = (self.reader.history_counts(x, self.gate_k) > self.max_hcount)[..., None]",
+     "tests/test_consolidate_fix.py::test_gated_overlay_suppresses_cues_in_stored_phrases_and_keeps_unseen_or_short_histories"),
+    ("M128", "src/clm/consolidate_fix.py", "return np.where(keep, tok, 0), np.where(keep, score, np.float32(0.0))",
+     "return np.where(keep, tok, 0), score",
+     "tests/test_consolidate_fix.py::test_gated_overlay_suppresses_cues_in_stored_phrases_and_keeps_unseen_or_short_histories"),
+    ("M129", "src/clm/consolidate_fix.py", "if gate_k < 2 or max_hcount < 0:", "if False:",
+     "tests/test_consolidate_fix.py::test_gated_overlay_suppresses_cues_in_stored_phrases_and_keeps_unseen_or_short_histories"),
+    ("M130", "src/clm/consolidate_fix.py", "else GatedOverlay(vocab, weight, reader, gate_k, max_hcount, keyfn))",
+     "else Overlay(vocab, weight, keyfn))",
+     "tests/test_consolidate_fix.py::test_run_write_gated_matches_run_write_when_ungated_and_cuts_phrase_injections_when_gated"),
+    ("M131", "src/clm/consolidate_fix.py",
+     "loss = loss + memory_kl_weight * cue_kl(_forward(model, reader, overlay, x, device), t_logits, y.to(device))",
+     "loss = loss + memory_kl_weight * cue_kl(_forward(model, reader, None, x, device), t_logits, y.to(device))",
+     "tests/test_consolidate_fix.py::test_memory_kl_weight_trains_the_student_with_the_overlay_on_and_records_unseen_list_recall"),
+    ("M132", "src/clm/consolidate_fix.py", "if memory_kl_weight < 0:", "if False:",
+     "tests/test_consolidate_fix.py::test_a_bad_teacher_mode_is_refused_and_a_crash_leaves_the_head_trainable"),
+    ("M133", "src/clm/consolidate_fix.py", "unseen_recall.append(quiz(model, reader, unseen_overlay, u_qx, u_qy, cfg.batch, device))",
+     "unseen_recall.append(quiz(model, reader, None, u_qx, u_qy, cfg.batch, device))",
+     "tests/test_consolidate_fix.py::test_memory_kl_weight_trains_the_student_with_the_overlay_on_and_records_unseen_list_recall"),
 ]
 
 

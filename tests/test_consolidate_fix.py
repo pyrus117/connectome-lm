@@ -4,8 +4,10 @@ import numpy as np
 import pytest
 import torch
 
-from clm.consolidate_fix import run_consolidate_variant
+from clm.consolidate_fix import GatedOverlay, run_consolidate_variant, run_write_gated
+from clm.fastwrite import Overlay, count_input, cue_kl, quiz
 from clm.fastwrite_arms import ArmConfig, run_consolidate, run_write
+from clm.vocab_task import quiz_batches
 from test_fastwrite import CPU, EOT, VOCAB, model, setup  # noqa: F401  (setup is a fixture)
 
 CFG = ArmConfig(per_seq=8, batch=4, lr=5e-3, warmup=2, steps=40, anchor_batch=2)
@@ -72,8 +74,75 @@ def test_a_bad_teacher_mode_is_refused_and_a_crash_leaves_the_head_trainable(set
     reader, val, lists = setup
     with pytest.raises(ValueError, match="teacher_mode"):
         variant(model(), setup, teacher_mode="student")
+    with pytest.raises(ValueError, match="memory_kl_weight"):
+        variant(model(), setup, memory_kl_weight=-0.1)
     m = model()
     with pytest.raises(ValueError):                                              # no anchor windows to draw from
         run_consolidate_variant(m, reader, lists[:1], 1.0, VOCAB, EOT, CFG, CPU, val, LM, ANCHOR[:1], ctx=64,
                                 freeze_head=True)
     assert m.head.weight.requires_grad
+
+
+def test_gated_overlay_suppresses_cues_in_stored_phrases_and_keeps_unseen_or_short_histories(setup):
+    reader, _, _ = setup
+    table2 = next(t for t in reader.tables if t.k == 2)
+    stored_key = int(table2.keys[int(np.argmax(table2.hcount))])
+    w0, w1 = stored_key >> 13, stored_key & ((1 << 13) - 1)
+    max_hc = int(table2.hcount.max())
+    assert reader.history_counts(np.array([[w0, w1]]), 2)[0, 1] == max_hc and max_hc >= 1
+    g = GatedOverlay(VOCAB, 2.5, reader, gate_k=2, max_hcount=0)
+    g.write([w1], [99])
+    # Position 0 (t < k-1, count -1), position 2 (after EOT, count 0), position 4 (stored bigram w0, w1, count >= 1)
+    x = np.array([[w1, EOT, w1, w0, w1]], dtype=np.int64)
+    tok, score = g.slot(x)
+    assert tok[0, :, 0].tolist() == [99, 0, 99, 0, 0]
+    assert score[0, :, 0].tolist() == pytest.approx([2.5, 0.0, 2.5, 0.0, 0.0])
+    g_loose = GatedOverlay(VOCAB, 2.5, reader, gate_k=2, max_hcount=max_hc)
+    g_loose.write([w1], [99])
+    assert g_loose.slot(x)[0][0, 4, 0] == 99 and g_loose.slot(x)[1][0, 4, 0] == pytest.approx(2.5)
+    with pytest.raises(ValueError, match="gate_k"):
+        GatedOverlay(VOCAB, 1.0, reader, gate_k=1)
+    with pytest.raises(ValueError, match="max_hcount"):
+        GatedOverlay(VOCAB, 1.0, reader, gate_k=2, max_hcount=-1)
+
+
+def test_run_write_gated_matches_run_write_when_ungated_and_cuts_phrase_injections_when_gated(setup):
+    reader, val, lists = setup
+    m = model()
+    plain = run_write(m, reader, lists[:2], 50.0, VOCAB, EOT, CFG, CPU, val, LM, ctx=64)
+    ungated = run_write_gated(m, reader, lists[:2], 50.0, VOCAB, EOT, CFG, CPU, val, LM, gate_k=None, ctx=64)
+    gated = run_write_gated(m, reader, lists[:2], 50.0, VOCAB, EOT, CFG, CPU, val, LM, gate_k=2, max_hcount=0, ctx=64)
+    for k in ("acc_matrix", "lm_loss_memory_on", "lm_loss_memory_off", "final_mean", "backward_transfer"):
+        assert ungated[k] == plain[k], k
+    assert gated["lm_loss_memory_on"] != plain["lm_loss_memory_on"]
+
+
+def test_memory_kl_weight_trains_the_student_with_the_overlay_on_and_records_unseen_list_recall(setup):
+    reader, val, lists = setup
+    cues, answers = lists[0]
+    unseen = lists[2]
+    qx, qy = quiz_batches(cues, answers, 8, 0, EOT)
+    o = Overlay(VOCAB, 100.0)
+    o.write(cues, answers)
+    m_off, m_on = model(), model()
+    original = copy.deepcopy(m_off).eval()
+    r_off = run_consolidate_variant(m_off, reader, lists[:1], 100.0, VOCAB, EOT, CFG, CPU, val, LM, ANCHOR, ctx=64,
+                                    teacher_mode="original", memory_kl_weight=0.0, unseen_list=unseen)
+    r_on = run_consolidate_variant(m_on, reader, lists[:1], 100.0, VOCAB, EOT, CFG, CPU, val, LM, ANCHOR, ctx=64,
+                                   teacher_mode="original", memory_kl_weight=2.0, unseen_list=unseen)
+
+    def mem_kl(student):
+        student.eval()
+        with torch.no_grad():
+            s, _ = student(qx[0:1], count=count_input(reader, o, qx[0:1].numpy(), CPU))
+            t, _ = original(qx[0:1], count=count_input(reader, o, qx[0:1].numpy(), CPU))
+        return cue_kl(s, t, qy[0:1]).item()
+    assert mem_kl(m_on) < mem_kl(m_off)
+    assert r_on["with_memory"]["final_mean"] == pytest.approx(r_on["acc_matrix_with_memory"][-1][0])
+    u_ov = Overlay(VOCAB, 100.0)
+    u_ov.write(*unseen)
+    u_qx, u_qy = quiz_batches(unseen[0], unseen[1], 8, 0, EOT)
+    assert r_off["unseen_start"] == pytest.approx(quiz(original, reader, u_ov, u_qx, u_qy, 4, CPU))
+    assert r_off["unseen_start"] > 0.1
+    assert r_on["unseen_with_memory"][0] == pytest.approx(quiz(m_on, reader, u_ov, u_qx, u_qy, 4, CPU))
+    assert r_on["unseen_with_memory"][0] != pytest.approx(quiz(m_on, reader, None, u_qx, u_qy, 4, CPU))

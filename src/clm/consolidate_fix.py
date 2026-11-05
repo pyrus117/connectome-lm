@@ -17,9 +17,42 @@ import torch
 
 from clm.fastwrite import Overlay, cue_kl, language_loss, lm_kl, quiz, sequence_summary
 from clm.fastwrite_arms import _forward, _quizzes, _step_lr
-from clm.vocab_task import train_batch
+from clm.vocab_task import quiz_batches, train_batch
 
 TEACHER_MODES = ("rolling", "original")
+
+
+class GatedOverlay(Overlay):
+    """An Overlay that suppresses its slot at positions where the stored `gate_k`-token history count in
+    `reader` exceeds `max_hcount`, so a written 1-token cue does not fire inside a familiar phrase."""
+
+    def __init__(self, vocab, weight, reader, gate_k, max_hcount=0, keyfn=None):
+        super().__init__(vocab, weight, keyfn)
+        if gate_k < 2 or max_hcount < 0:
+            raise ValueError(f"need gate_k >= 2 and max_hcount >= 0, got gate_k={gate_k}, max_hcount={max_hcount}")
+        self.reader, self.gate_k, self.max_hcount = reader, gate_k, max_hcount
+
+    def slot(self, x):
+        tok, score = super().slot(x)
+        keep = (self.reader.history_counts(x, self.gate_k) <= self.max_hcount)[..., None]
+        return np.where(keep, tok, 0), np.where(keep, score, np.float32(0.0))
+
+
+def run_write_gated(model, reader, lists, weight, vocab, eot, cfg, device, val, lm_windows,
+                    gate_k=None, max_hcount=0, ctx=512, keyfn=None):
+    """As run_write, with an optional context gate (`gate_k`, `max_hcount`) on the overlay."""
+    overlay = (Overlay(vocab, weight, keyfn) if gate_k is None
+               else GatedOverlay(vocab, weight, reader, gate_k, max_hcount, keyfn))
+    quizzes = _quizzes(lists, cfg, eot)
+    matrix, lm = [], []
+    base = language_loss(model, reader, None, val, lm_windows, ctx, device)
+    for cues, answers in lists:
+        overlay.write(cues, answers)
+        matrix.append([quiz(model, reader, overlay, qx, qy, cfg.batch, device) for qx, qy in quizzes])
+        lm.append(language_loss(model, reader, overlay, val, lm_windows, ctx, device))
+    return {"arm": "write_gated", "weight": weight, "gate_k": gate_k, "max_hcount": max_hcount,
+            "acc_matrix": matrix, "lm_loss_memory_on": lm, "lm_loss_memory_off": base,
+            **sequence_summary(matrix)}
 
 
 def _frozen_copy(model):
@@ -30,14 +63,25 @@ def _frozen_copy(model):
 
 
 def run_consolidate_variant(model, reader, lists, weight, vocab, eot, cfg, device, val, lm_windows, anchor_windows,
-                            ctx=512, keyfn=None, teacher_mode="rolling", freeze_head=False):
+                            ctx=512, keyfn=None, teacher_mode="rolling", freeze_head=False,
+                            memory_kl_weight=0.0, unseen_list=None):
     """As run_consolidate, plus `teacher_matrix[i][j]`: the teacher's own recall (memory on) of list j at the start of
-    phase i, which is the ceiling the student can reach. `model` is trained in place and has its head trainable again
-    on return."""
+    phase i, which is the ceiling the student can reach. With `memory_kl_weight > 0`, also trains the student with the
+    overlay on to match the teacher, preserving the memory-read channel. With `unseen_list` ((cues, answers) disjoint
+    from `lists`), records `unseen_start` and `unseen_with_memory` after each phase. `model` is trained in place and
+    has its head trainable again on return."""
     if teacher_mode not in TEACHER_MODES:
         raise ValueError(f"teacher_mode must be one of {TEACHER_MODES}, got {teacher_mode!r}")
+    if memory_kl_weight < 0:
+        raise ValueError(f"memory_kl_weight must be >= 0, got {memory_kl_weight}")
     overlay = Overlay(vocab, weight, keyfn)
     original = _frozen_copy(model)
+    if unseen_list is not None:
+        unseen_overlay = Overlay(vocab, weight, keyfn)
+        unseen_overlay.write(*unseen_list)
+        u_qx, u_qy = quiz_batches(unseen_list[0], unseen_list[1], cfg.per_seq, cfg.task_seed, eot)
+        unseen_start = quiz(original, reader, unseen_overlay, u_qx, u_qy, cfg.batch, device)
+        unseen_recall = []
     model.head.weight.requires_grad_(not freeze_head)
     try:
         params = [p for p in model.parameters() if p.requires_grad]
@@ -62,6 +106,8 @@ def run_consolidate_variant(model, reader, lists, weight, vocab, eot, cfg, devic
                     t_logits = _forward(teacher, reader, overlay, x, device)
                 s_logits = _forward(model, reader, None, x, device)
                 loss = cue_kl(s_logits, t_logits, y.to(device))
+                if memory_kl_weight > 0:
+                    loss = loss + memory_kl_weight * cue_kl(_forward(model, reader, overlay, x, device), t_logits, y.to(device))
                 if cfg.anchor_weight > 0:
                     starts = rng.choice(anchor_windows, cfg.anchor_batch, replace=False)
                     ax = torch.from_numpy(np.stack([val[s:s + ctx] for s in starts]).astype(np.int64))
@@ -78,8 +124,15 @@ def run_consolidate_variant(model, reader, lists, weight, vocab, eot, cfg, devic
             matrix.append([quiz(model, reader, None, qx, qy, cfg.batch, device) for qx, qy in quizzes])
             matrix_with_memory.append([quiz(model, reader, overlay, qx, qy, cfg.batch, device) for qx, qy in quizzes])
             lm.append(language_loss(model, reader, None, val, lm_windows, ctx, device))
+            if unseen_list is not None:
+                unseen_recall.append(quiz(model, reader, unseen_overlay, u_qx, u_qy, cfg.batch, device))
     finally:
         model.head.weight.requires_grad_(True)
-    return {"arm": "consolidate", "teacher_mode": teacher_mode, "freeze_head": freeze_head, "weight": weight,
-            "acc_matrix": matrix, "acc_matrix_with_memory": matrix_with_memory, "teacher_matrix": teacher_matrix,
-            "lm_loss": lm, "lm_loss_start": base, **sequence_summary(matrix)}
+    out = {"arm": "consolidate", "teacher_mode": teacher_mode, "freeze_head": freeze_head,
+           "memory_kl_weight": memory_kl_weight, "weight": weight, "acc_matrix": matrix,
+           "acc_matrix_with_memory": matrix_with_memory, "with_memory": sequence_summary(matrix_with_memory),
+           "teacher_matrix": teacher_matrix, "lm_loss": lm, "lm_loss_start": base, **sequence_summary(matrix)}
+    if unseen_list is not None:
+        out["unseen_start"] = unseen_start
+        out["unseen_with_memory"] = unseen_recall
+    return out
