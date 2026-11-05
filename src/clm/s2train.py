@@ -50,6 +50,8 @@ class S2TrainConfig:
     prereg: str = "PREREG_stage2_0.md"
     arch: str = "b0"              # "b0", or "loop" (Stage 2D: B0's blocks as prelude, shared loop, coda)
     loop_max: int = 6             # deepest pass count of the looped arch
+    loop_gain: bool = False       # Stage 2H: a learned per-pass, per-channel residual gain in the loop
+    loop_loss: str = "sampled"    # "sampled": one random depth per micro-batch (Stage 2D); "all": mean loss over every depth
 
 
 def lr_at(step, steps, cfg):
@@ -97,18 +99,23 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         raise ValueError(f"unknown arch {tcfg.arch!r}")
     if tcfg.arch == "loop" and tcfg.memory != "none":
         raise ValueError("the looped arch has no memory arm")
+    if tcfg.loop_loss not in ("sampled", "all"):
+        raise ValueError(f"unknown loop_loss {tcfg.loop_loss!r}")
+    if tcfg.arch != "loop" and (tcfg.loop_gain or tcfg.loop_loss != "sampled"):
+        raise ValueError("loop_gain and loop_loss belong to the looped arch")
     if tcfg.count_gate and tcfg.memory != "count":
         raise ValueError("count_gate needs memory 'count'")
     if mcfg.count_orders:
         raise ValueError("count_orders is set from train.count_gate, not from the size config")
     looped = tcfg.arch == "loop"
+    all_depths = looped and tcfg.loop_loss == "all"
     reader = (reader_for(ROOT / tcfg.count_dir, tcfg.count_k, ROOT / tcfg.bucket_dir if tcfg.bucket_dir else None)
               if tcfg.memory == "count" else None)
     if tcfg.count_gate:
         mcfg = dataclasses.replace(mcfg, count_orders=len(reader.tables))
     bucket_kind = (json.loads((ROOT / tcfg.bucket_dir / "bucket.json").read_text())["kind"]
                    if reader is not None and tcfg.bucket_dir else None)
-    model = (build_loop(mcfg, seed, tcfg.loop_max) if looped else build_b0(mcfg, seed)).to(device)
+    model = (build_loop(mcfg, seed, tcfg.loop_max, tcfg.loop_gain) if looped else build_b0(mcfg, seed)).to(device)
     opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd, tcfg.adam_mult)
     steps = tcfg.tokens // (tcfg.batch * mcfg.ctx)
     if tcfg.batch % tcfg.micro:
@@ -141,18 +148,23 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             data = prefetch.get(step)
             if data.step != step:
                 raise RuntimeError(f"prefetch handed over step {data.step} for step {step}")
-            loss_sum, depths = 0.0, []
+            loss_sum, depths, by_depth_train = 0.0, [], torch.zeros(tcfg.loop_max)
             for k in range(accum):
                 sl = slice(k * tcfg.micro, (k + 1) * tcfg.micro)
                 x, y = torch.from_numpy(data.x[sl]).to(device), torch.from_numpy(data.y[sl]).to(device)
                 kw = {}
                 if reader is not None:
                     kw["count"] = data.count(sl, device)
-                if looped:
+                if looped and not all_depths:
                     kw["depth"] = sample_depth(seed, step, k, tcfg.loop_max)
                     depths.append(kw["depth"])
                 with _autocast(device):
-                    _, loss = model(x, y, **kw)
+                    if all_depths:
+                        per_depth = model.forward_all(x, y)
+                        loss = per_depth.mean()
+                        by_depth_train += per_depth.detach().float().cpu() / accum
+                    else:
+                        _, loss = model(x, y, **kw)
                 (loss / accum).backward()
                 loss_sum += loss.item() / accum
             gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), tcfg.clip).item()
@@ -168,7 +180,9 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
             dt = time.time() - t0
             train_seconds += dt
             rec = {"step": step, "loss": loss_sum, "lr": lr, "grad_norm": gnorm, "seconds": round(dt, 4)}
-            if looped:
+            if all_depths:
+                rec["train_loss_by_depth"] = by_depth_train.tolist()
+            elif looped:
                 rec["depths"] = depths
             if reader is not None:
                 rec["lookup_seconds"] = round(data.lookup_seconds, 4)
@@ -193,7 +207,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     if end < steps:
         return
     commit, dirty = _git()
-    arm = ("loop" if looped else "b0" if reader is None else f"count_{bucket_kind}" if bucket_kind
+    arm = (("loop" + ("_gain" if tcfg.loop_gain else "") + ("_all" if all_depths else "")) if looped else "b0" if reader is None else f"count_{bucket_kind}" if bucket_kind
            else "count" if tcfg.loo else "count_noloo") + ("_gated" if tcfg.count_gate else "")
     _write(out / "results.json", {
         "status": "complete", "arm": arm, "size": size, "seed": seed,
@@ -227,6 +241,9 @@ def main():
     ap.add_argument("--adam-mult", type=float, help="Stage 2F: AdamW-group rate as a multiple of --lr")
     ap.add_argument("--memory", choices=("none", "count"), help="arm override")
     ap.add_argument("--arch", choices=("b0", "loop"), help="architecture override")
+    ap.add_argument("--micro", type=int, help="windows per forward; the all-depth loss needs 4 on the laptop GPU")
+    ap.add_argument("--loop-gain", action="store_true", help="Stage 2H: per-pass residual gain in the looped arch")
+    ap.add_argument("--loop-loss", choices=("sampled", "all"), help="Stage 2H: loss over one sampled depth or every depth")
     ap.add_argument("--bucket-dir", help="Stage 2B: directory of bucket tables read as the COUNT fallback")
     ap.add_argument("--no-loo", action="store_true", help="leakage diagnostic: no leave-one-out while training")
     ap.add_argument("--count-gate", action="store_true", help="gated COUNT read (per order, source and count bin)")
@@ -235,6 +252,8 @@ def main():
     mcfg, tcfg = load_config(args.config, args.size)
     overrides = {k: v for k, v in (("optimizer", args.optimizer), ("lr", args.lr), ("adam_mult", args.adam_mult), ("tokens", args.tokens),
                                    ("memory", args.memory), ("prereg", args.prereg), ("arch", args.arch), ("bucket_dir", args.bucket_dir),
+                                   ("loop_gain", True if args.loop_gain else None), ("loop_loss", args.loop_loss),
+                                   ("micro", args.micro),
                                    ("loo", False if args.no_loo else None),
                                    ("count_gate", True if args.count_gate else None)) if v is not None}
     tcfg = dataclasses.replace(tcfg, **overrides)

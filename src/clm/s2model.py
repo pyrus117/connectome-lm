@@ -147,7 +147,7 @@ def init_b0(model, seed):
             g = torch.Generator().manual_seed(_seed_for(seed, name))
             if name.endswith(_ZERO_INIT) or name.endswith("ve_gate"):
                 new = torch.zeros(p.shape)
-            elif name == "count_gate":
+            elif name in ("count_gate", "loop_gain"):
                 new = torch.ones(p.shape)
             elif "embed" in name:
                 new = torch.randn(p.shape, generator=g)
