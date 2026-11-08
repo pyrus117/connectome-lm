@@ -6,12 +6,23 @@ skipped, an interrupted run resumes from its checkpoint.
     .venv/bin/python scripts/stage2_0_driver.py
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PY = ROOT / ".venv" / "bin" / "python"
+WINDOWS = os.name == "nt"
+PY = ROOT / ".venv" / ("Scripts/python.exe" if WINDOWS else "bin/python")
+
+
+def child_env(**extra):
+    env = {"PYTHONPATH": str(ROOT / "src"), **extra}
+    if WINDOWS:     # torch needs SYSTEMROOT and the CUDA DLL search path; expandable_segments is Linux-only
+        env.update({k: os.environ[k] for k in ("SYSTEMROOT", "PATH", "TEMP", "TMP") if k in os.environ})
+    else:
+        env.update({"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True", "PATH": "/usr/bin:/bin"})
+    return env
 CONFIG = "configs/stage2_0.json"
 OUT = ROOT / "runs2"
 PILOT_TOKENS = 50_000_000
@@ -26,9 +37,7 @@ def train(size, seed, out, extra=()):
     cmd = [str(PY), "-m", "clm.s2train", "--config", CONFIG, "--size", size, "--seed", str(seed),
            "--out", str(out), *extra]
     print("RUN", " ".join(cmd[2:]), flush=True)
-    code = subprocess.run(cmd, cwd=ROOT, env={"PYTHONPATH": str(ROOT / "src"),
-                                              "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
-                                              "PATH": "/usr/bin:/bin"}).returncode
+    code = subprocess.run(cmd, cwd=ROOT, env=child_env()).returncode
     if code == 2:
         print(f"DIVERGED {out}", flush=True)
         return None

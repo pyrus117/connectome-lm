@@ -14,7 +14,7 @@ from clm import rules2h as R
 from stage2_0_driver import OUT, ROOT
 
 base.CONFIG = "configs/stage2h.json"
-ENV = {"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/bin:/bin"}
+ENV = base.child_env()
 STATE = OUT / "stage2h"
 ARMS = {"reference": ([], "loop-M-{}"),
         "both": (["--loop-gain", "--loop-loss", "all", "--micro", "4"], "loop_gain_all-M-{}"),

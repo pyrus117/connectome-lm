@@ -74,3 +74,32 @@ All Stage 2F runs finished (05:43 NZDT). `scripts/stage2f_analyze.py` then crash
 Stage 2A's COUNT runs used one shared rate: their `results.json` predates the `adam_mult` setting. Fix (commit 45c17a5): read it
 with `.get("adam_mult", 1.0)`. No run, config, pre-registered rule or result was touched; the analysis was rerun by hand and wrote
 `results/stage2f.json`. The driver stopped at the crash, so it did not print its final VERDICT line.
+
+## 2026-11-08: Stage 2H moves to the Q-Youth work laptop (q-pc, Windows)
+
+The six unfinished Stage 2H runs (arm `both` seeds 1 and 2, `reference` seeds 1 and 2, ablations `gain` seed 0 and `all` seed 0) run on q-pc
+instead of the Linux laptop. The finished runs (`both` seed 0, and `reference` seed 0 reused from Stage 2D) ran on the Linux laptop.
+
+| | Linux laptop (seed 0 runs) | q-pc (the rest) |
+|---|---|---|
+| GPU | RTX 3050 Laptop, 4 GB | RTX 4060 Laptop, 8 GB |
+| OS and Python | Linux, 3.14.9 | Windows, 3.12.10 |
+| torch, numpy | 2.15.0 (CUDA 13.4), 2.5.4 | 2.15.0+cu134, 2.5.4 |
+
+Floating-point results are not bit-identical across the two machines, so the seed 0 pair and the seed 1 and 2 pairs are compared across machines.
+The registered effect size is 0.01 nats and the Stage 2D seed SD is about 0.003, so the expected effect is larger than the machine difference, but
+this was not measured. `train_seconds` is not comparable across the machines.
+
+Code changes (commit on branch `stage2-windows`; no change to the model, loss, optimiser, config, data or any registered rule):
+
+1. `src/clm/s2train.py`: the `resource` module does not exist on Windows. `host_rss_peak_mib` reads the peak working set through `psutil` there.
+   The Linux code path is the same expression as before.
+2. `scripts/stage2_0_driver.py`, `scripts/stage2h_driver.py`: venv python path `.venv/Scripts/python.exe` on Windows, and a child environment that
+   keeps `SYSTEMROOT`, `PATH`, `TEMP` and `TMP` there. `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` stays Linux-only.
+
+Git for Windows converts line endings by default (`core.autocrlf=true`). That changed the bytes of `configs/stage2h.json` and `PREREG_stage2h.md`
+and so their recorded SHA-256 values. This clone sets `core.autocrlf=false`; both hashes equal the values recorded in the seed 0 `results.json` files.
+
+Test suite on q-pc: 3 failures, none in code Stage 2H uses. `test_countread::test_leave_one_out_removes_a_history_that_was_seen_only_once`
+fails on a Windows file lock when a temporary folder holding a memory-mapped file is deleted. `test_prepared_data` (2 tests) needs
+`train_ids.txt` and `val_ids.txt`, which were not copied. `scripts/mutation_audit.py` was not rerun; the change touches no model logic.

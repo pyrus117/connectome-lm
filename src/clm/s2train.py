@@ -10,9 +10,14 @@ import argparse
 import dataclasses
 import json
 import math
-import resource
 import time
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:                       # Windows has no resource module
+    resource = None
+    import psutil
 
 import torch
 
@@ -23,6 +28,12 @@ from clm.s2model import B0Config, build_b0, param_groups
 from clm.train import ROOT, _autocast, _git, _sha256, _write
 
 PREREG = ROOT / "PREREG_stage2_0.md"
+
+
+def _peak_rss_mib():
+    if resource is not None:
+        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+    return round(psutil.Process().memory_info().peak_wset / 2**20)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -221,7 +232,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         "count_absent_norm": model.count_absent.norm(dim=1).tolist() if mcfg.count_orders else None,
         "peak_vram_mib": round(torch.cuda.max_memory_allocated(device) / 2**20) if device.type == "cuda" else None,
         "lookup_seconds_mean": round(sum(lookup_seconds) / len(lookup_seconds), 4) if lookup_seconds else None,
-        "host_rss_peak_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
+        "host_rss_peak_mib": _peak_rss_mib(),
         "config_sha256": _sha256(config_path), "prereg_sha256": _sha256(ROOT / tcfg.prereg),
         "git_commit": commit, "git_dirty": dirty,
         "device": torch.cuda.get_device_name(device) if device.type == "cuda" else "cpu"})
