@@ -114,3 +114,8 @@ The loader already defaults the missing `loop_gain` and `loop_loss` of that run.
 
 The change is in the loader only. No decision rule, threshold, run, or result changed, and the analysis had not produced any number before this change.
 The same one-line fix is needed in the Linux repo, where the unmodified loader would reject Stage 2D's seed 0 in the same way.
+
+## 2026-11-09: Windows port and analysis loader fix merged into `stage2`; oracle script reads `loop_gain`
+
+All training and inference now run on q-pc, so the two q-pc commits above (applied here with `git am`) are on `stage2`. The Linux code path of each is the same expression as before. The q-pc clone is reset to this branch.
+`scripts/stage2d_analyze.py` now builds the model with `gain=tcfg.loop_gain` and takes an optional output file name as a second argument, so the Stage 2H repeat of the oracle analysis (PREREG_stage2h.md section 7) does not overwrite `results/stage2d.json`. For Stage 2D's own run both defaults give the old behaviour. Test suite 100% and mutation audit 147/147 killed, both required controls as expected, after the merge.

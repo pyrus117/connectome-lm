@@ -1,9 +1,10 @@
 """Stage 2D analysis (PREREG_stage2d.md): per-token loss at every depth of the trained
 looped model, the exact optimal-depth frontier, the effort law P9, the executed
 frontiers (oracle depths and a free-exit rule), and the RL gate. Writes
-results/stage2d.json.
+results/stage2d.json, or results/<name> if a second argument is given (Stage 2H
+repeats it on a gained model: loop_gain is read from the run's own settings).
 
-    .venv/bin/python scripts/stage2d_analyze.py [runs2/loop-M-0]
+    .venv/bin/python scripts/stage2d_analyze.py [runs2/loop-M-0 [stage2d.json]]
 """
 import json
 import math
@@ -32,7 +33,7 @@ def main():
     res = json.loads((run / "results.json").read_text())
     mcfg, tcfg = B0Config(**res["model"]), S2TrainConfig(**res["train"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_loop(mcfg, res["seed"], tcfg.loop_max).to(device)
+    model = build_loop(mcfg, res["seed"], tcfg.loop_max, gain=tcfg.loop_gain).to(device)
     model.load_state_dict(torch.load(run / "ckpt.pt", map_location=device)["model"])
     val = open_tokens(ROOT / tcfg.val_bin)
     args = (val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro, device)
@@ -89,7 +90,7 @@ def main():
     }
     law = out["effort_law_predicted"]
     out["p9_supported"] = bool(law["r2"] is not None and law["r2"] >= 0.9 and law["slope"] > 0)
-    (ROOT / "results" / "stage2d.json").write_text(json.dumps(out, indent=2) + "\n")
+    (ROOT / "results" / (sys.argv[2] if len(sys.argv) > 2 else "stage2d.json")).write_text(json.dumps(out, indent=2) + "\n")
     print(json.dumps({k: out[k] for k in ("fixed_depth", "geometric_decay", "effort_law_predicted", "p9_supported",
                                           "cross_token_effect_mean", "oracle_vs_free_exit_gap",
                                           "oracle_vs_fixed_depth_gap", "rl_gate")}, indent=2))
