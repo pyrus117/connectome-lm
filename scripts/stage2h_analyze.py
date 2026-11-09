@@ -31,12 +31,12 @@ def sha(name):
 
 def load(arm, seed):
     """A finished run, checked against its arm. Stage 2D's seed 0 predates this stage: it carries Stage 2D's
-    pre-registration hash and has no loop_gain or loop_loss setting (both default to off and sampled)."""
+    pre-registration hash and has no loop_gain, loop_loss or adam_mult setting (they default to off, sampled and 1.0, one shared rate)."""
     name, results_arm, gain, loss, micro = ARMS[arm]
     own = "PREREG_stage2d.md" if (arm, seed) == ("reference", 0) else "PREREG_stage2h.md"
     r = A.load(RUNS / name.format(seed) / "results.json", results_arm, sha(own))
     want = {**SHARED, "loop_gain": gain, "loop_loss": loss, "micro": micro}
-    got = {k: r["train"].get(k, False if k == "loop_gain" else "sampled" if k == "loop_loss" else None) for k in want}
+    got = {k: r["train"].get(k, False if k == "loop_gain" else "sampled" if k == "loop_loss" else 1.0 if k == "adam_mult" else None) for k in want}
     if got != want:
         sys.exit(f"{name.format(seed)} trained with {got}, expected {want}")
     if len(r["val_loss_by_depth"]) != 6:

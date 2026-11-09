@@ -103,3 +103,14 @@ and so their recorded SHA-256 values. This clone sets `core.autocrlf=false`; bot
 Test suite on q-pc: 3 failures, none in code Stage 2H uses. `test_countread::test_leave_one_out_removes_a_history_that_was_seen_only_once`
 fails on a Windows file lock when a temporary folder holding a memory-mapped file is deleted. `test_prepared_data` (2 tests) needs
 `train_ids.txt` and `val_ids.txt`, which were not copied. `scripts/mutation_audit.py` was not rerun; the change touches no model logic.
+
+## 2026-11-09: Stage 2H analysis loader rejected the reused reference seed 0
+
+All six runs finished on q-pc. `scripts/stage2h_analyze.py` then stopped with
+`loop-M-0 trained with {... 'adam_mult': None ...}, expected {... 'adam_mult': 1.0 ...}`.
+Stage 2D's seed 0 predates the `adam_mult` setting (added in Stage 2F, commit bca00eb), so its `results.json` does not record it.
+Stage 2D's code (`param_groups(model, optimizer, lr, wd)`) used one shared rate for every parameter, which is `adam_mult` 1.0.
+The loader already defaults the missing `loop_gain` and `loop_loss` of that run. The same default is now applied to `adam_mult` (1.0).
+
+The change is in the loader only. No decision rule, threshold, run, or result changed, and the analysis had not produced any number before this change.
+The same one-line fix is needed in the Linux repo, where the unmodified loader would reject Stage 2D's seed 0 in the same way.
