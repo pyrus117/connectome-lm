@@ -1,0 +1,63 @@
+{
+  "prereg_sha256": "7bca013ac318571682023795a6ec8afdb94896f09b7326dfe03e2c57e98175b2",
+  "region": [
+    1.25,
+    2.7
+  ],
+  "sesoi": 0.01,
+  "oracle_mean_gap": 0.06256548922758547,
+  "rules": {
+    "change": {
+      "verdict": "NO_MEANINGFUL_DIFFERENCE",
+      "gap_by_seed": [
+        0.0009216716982036743,
+        0.001871159126949351,
+        0.0013930199310152602
+      ],
+      "mean_gap": 0.0013952835853894285,
+      "share_of_oracle_gap": 0.0223011695843056
+    },
+    "entropy": {
+      "verdict": "X_WORSE",
+      "gap_by_seed": [
+        -0.03014275398497057,
+        -0.03219404809487969,
+        -0.029201591302125962
+      ],
+      "mean_gap": -0.030512797793992075,
+      "share_of_oracle_gap": -0.4876937457165893
+    },
+    "margin": {
+      "verdict": "NOT_SCORED",
+      "gap_by_seed": [
+        null,
+        null,
+        null
+      ],
+      "mean_gap": null,
+      "share_of_oracle_gap": null
+    },
+    "probe_small": {
+      "verdict": "NO_MEANINGFUL_DIFFERENCE",
+      "gap_by_seed": [
+        0.0027573729114465095,
+        0.0029656131657249674,
+        0.002774064882805405
+      ],
+      "mean_gap": 0.002832350319992294,
+      "share_of_oracle_gap": 0.04527016978464695
+    },
+    "probe_state": {
+      "verdict": "NO_MEANINGFUL_DIFFERENCE",
+      "gap_by_seed": [
+        0.003383821338843518,
+        0.0036647918771754995,
+        0.003115801494440351
+      ],
+      "mean_gap": 0.0033881382368197896,
+      "share_of_oracle_gap": 0.054153468288168374
+    }
+  },
+  "p18_supported": false,
+  "winners": []
+}
