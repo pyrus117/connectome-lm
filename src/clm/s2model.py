@@ -30,6 +30,7 @@ class B0Config:
     softcap: float = 15.0
     rope_base: float = 10000.0
     count_orders: int = 0         # > 0: gated COUNT read over this many orders (B0GPT._gate)
+    count_scale: bool = False     # one learned scalar on the whole COUNT read (Stage 2K scale-only control)
 
 
 def rms(x):
@@ -87,6 +88,10 @@ class B0GPT(nn.Module):
         if cfg.count_orders:
             self.count_gate = nn.Parameter(torch.ones(cfg.count_orders, 2 * N_GATE_BINS))
             self.count_absent = nn.Parameter(torch.zeros(cfg.count_orders, cfg.d_model))
+        if cfg.count_scale:
+            if cfg.count_orders:
+                raise ValueError("count_scale and count_orders are separate arms; set one")
+            self.count_scale = nn.Parameter(torch.ones(()))
         cos, sin = rotary(cfg.ctx, cfg.d_model // cfg.n_head, cfg.rope_base)
         self.register_buffer("cos", cos, persistent=False)
         self.register_buffer("sin", sin, persistent=False)
@@ -108,6 +113,8 @@ class B0GPT(nn.Module):
             if state:
                 score, absent = self._gate(score, state[0])
                 x = x + absent
+            if self.cfg.count_scale:
+                score = score * self.count_scale
             x = x + F.embedding_bag(tok.reshape(b * t, s), self.head.weight,
                                     per_sample_weights=score.reshape(b * t, s), mode="sum").view(b, t, -1)
         x = rms(x)
@@ -147,7 +154,7 @@ def init_b0(model, seed):
             g = torch.Generator().manual_seed(_seed_for(seed, name))
             if name.endswith(_ZERO_INIT) or name.endswith("ve_gate"):
                 new = torch.zeros(p.shape)
-            elif name in ("count_gate", "loop_gain"):
+            elif name in ("count_gate", "loop_gain", "count_scale"):
                 new = torch.ones(p.shape)
             elif "embed" in name:
                 new = torch.randn(p.shape, generator=g)

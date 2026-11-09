@@ -58,6 +58,7 @@ class S2TrainConfig:
     bucket_dir: str = ""          # Stage 2B: bucket tables read where an exact history is not stored
     loo: bool = True              # leave-one-out reads while training (validation never needs it)
     count_gate: bool = False      # gated COUNT read (s2model.B0GPT._gate): scalar per order, source and count bin
+    count_scale: bool = False     # Stage 2K scale-only control: one learned scalar on the whole COUNT read, no gate table
     prereg: str = "PREREG_stage2_0.md"
     arch: str = "b0"              # "b0", or "loop" (Stage 2D: B0's blocks as prelude, shared loop, coda)
     loop_max: int = 6             # deepest pass count of the looped arch
@@ -114,8 +115,12 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         raise ValueError(f"unknown loop_loss {tcfg.loop_loss!r}")
     if tcfg.arch != "loop" and (tcfg.loop_gain or tcfg.loop_loss != "sampled"):
         raise ValueError("loop_gain and loop_loss belong to the looped arch")
-    if tcfg.count_gate and tcfg.memory != "count":
-        raise ValueError("count_gate needs memory 'count'")
+    if (tcfg.count_gate or tcfg.count_scale) and tcfg.memory != "count":
+        raise ValueError("count_gate and count_scale need memory 'count'")
+    if tcfg.count_gate and tcfg.count_scale:
+        raise ValueError("count_gate and count_scale are separate arms; set one")
+    if mcfg.count_scale:
+        raise ValueError("count_scale is set from train.count_scale, not from the size config")
     if mcfg.count_orders:
         raise ValueError("count_orders is set from train.count_gate, not from the size config")
     looped = tcfg.arch == "loop"
@@ -124,6 +129,8 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
               if tcfg.memory == "count" else None)
     if tcfg.count_gate:
         mcfg = dataclasses.replace(mcfg, count_orders=len(reader.tables))
+    if tcfg.count_scale:
+        mcfg = dataclasses.replace(mcfg, count_scale=True)
     bucket_kind = (json.loads((ROOT / tcfg.bucket_dir / "bucket.json").read_text())["kind"]
                    if reader is not None and tcfg.bucket_dir else None)
     model = (build_loop(mcfg, seed, tcfg.loop_max, tcfg.loop_gain) if looped else build_b0(mcfg, seed)).to(device)
@@ -219,7 +226,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         return
     commit, dirty = _git()
     arm = (("loop" + ("_gain" if tcfg.loop_gain else "") + ("_all" if all_depths else "")) if looped else "b0" if reader is None else f"count_{bucket_kind}" if bucket_kind
-           else "count" if tcfg.loo else "count_noloo") + ("_gated" if tcfg.count_gate else "")
+           else "count" if tcfg.loo else "count_noloo") + ("_gated" if tcfg.count_gate else "_scaled" if tcfg.count_scale else "")
     _write(out / "results.json", {
         "status": "complete", "arm": arm, "size": size, "seed": seed,
         "model": dataclasses.asdict(mcfg), "train": dataclasses.asdict(tcfg),
@@ -230,6 +237,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         "val_loss_by_depth": by_depth,
         "count_gate": model.count_gate.tolist() if mcfg.count_orders else None,
         "count_absent_norm": model.count_absent.norm(dim=1).tolist() if mcfg.count_orders else None,
+        "count_scale": model.count_scale.item() if mcfg.count_scale else None,
         "peak_vram_mib": round(torch.cuda.max_memory_allocated(device) / 2**20) if device.type == "cuda" else None,
         "lookup_seconds_mean": round(sum(lookup_seconds) / len(lookup_seconds), 4) if lookup_seconds else None,
         "host_rss_peak_mib": _peak_rss_mib(),
@@ -258,6 +266,7 @@ def main():
     ap.add_argument("--bucket-dir", help="Stage 2B: directory of bucket tables read as the COUNT fallback")
     ap.add_argument("--no-loo", action="store_true", help="leakage diagnostic: no leave-one-out while training")
     ap.add_argument("--count-gate", action="store_true", help="gated COUNT read (per order, source and count bin)")
+    ap.add_argument("--count-scale", action="store_true", help="Stage 2K: one learned scalar on the COUNT read (scale-only control)")
     ap.add_argument("--prereg", help="pre-registration file whose hash the results record")
     args = ap.parse_args()
     mcfg, tcfg = load_config(args.config, args.size)
@@ -266,7 +275,8 @@ def main():
                                    ("loop_gain", True if args.loop_gain else None), ("loop_loss", args.loop_loss),
                                    ("micro", args.micro),
                                    ("loo", False if args.no_loo else None),
-                                   ("count_gate", True if args.count_gate else None)) if v is not None}
+                                   ("count_gate", True if args.count_gate else None),
+                                   ("count_scale", True if args.count_scale else None)) if v is not None}
     tcfg = dataclasses.replace(tcfg, **overrides)
     device = torch.device(args.device)
     if device.type == "cuda":
