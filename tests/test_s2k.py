@@ -74,7 +74,7 @@ def test_a_scaled_run_trains_its_scalar_names_its_arm_and_reports_it(setup):
     run("T", 0, TINY, tcfg, tmp / "c", CPU)
     got = {n: json.loads((tmp / n / "results.json").read_text()) for n in "sc"}
     assert [got[n]["arm"] for n in "sc"] == ["count_scaled", "count"]
-    assert got["s"]["model"]["count_scale"] is True and got["c"]["model"]["count_scale"] is False
+    assert got["s"]["model"]["count_scale"] == 1 and got["c"]["model"]["count_scale"] == 0
     assert isinstance(got["s"]["count_scale"], float) and got["s"]["count_scale"] != 1.0
     assert got["c"]["count_scale"] is None and got["s"]["count_gate"] is None
     assert math.isfinite(got["s"]["final_val_loss"])         # after six steps the scalar's effect on the loss is below float32 resolution

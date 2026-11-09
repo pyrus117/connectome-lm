@@ -30,7 +30,7 @@ class B0Config:
     softcap: float = 15.0
     rope_base: float = 10000.0
     count_orders: int = 0         # > 0: gated COUNT read over this many orders (B0GPT._gate)
-    count_scale: bool = False     # one learned scalar on the whole COUNT read (Stage 2K scale-only control)
+    count_scale: int = 0          # 1: one learned scalar on the whole COUNT read (Stage 2K control); J > 1: one per order over J orders (Stage 2K2)
 
 
 def rms(x):
@@ -91,7 +91,7 @@ class B0GPT(nn.Module):
         if cfg.count_scale:
             if cfg.count_orders:
                 raise ValueError("count_scale and count_orders are separate arms; set one")
-            self.count_scale = nn.Parameter(torch.ones(()))
+            self.count_scale = nn.Parameter(torch.ones(()) if cfg.count_scale == 1 else torch.ones(cfg.count_scale))
         cos, sin = rotary(cfg.ctx, cfg.d_model // cfg.n_head, cfg.rope_base)
         self.register_buffer("cos", cos, persistent=False)
         self.register_buffer("sin", sin, persistent=False)
@@ -114,7 +114,7 @@ class B0GPT(nn.Module):
                 score, absent = self._gate(score, state[0])
                 x = x + absent
             if self.cfg.count_scale:
-                score = score * self.count_scale
+                score = score * self._scale(score.shape[-1])
             x = x + F.embedding_bag(tok.reshape(b * t, s), self.head.weight,
                                     per_sample_weights=score.reshape(b * t, s), mode="sum").view(b, t, -1)
         x = rms(x)
@@ -126,6 +126,15 @@ class B0GPT(nn.Module):
         if targets is None:
             return logits, None
         return logits, F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
+
+    def _scale(self, slots):
+        """The learned read scale per slot: one scalar, or one per order (slots are grouped order by order, as in _gate)."""
+        if self.count_scale.dim() == 0:
+            return self.count_scale
+        j = self.count_scale.numel()
+        if slots % j:
+            raise ValueError(f"a per-order scale over {j} orders cannot split {slots} slots")
+        return self.count_scale.repeat_interleave(slots // j)
 
     def _gate(self, score, state):
         """Gated COUNT read (states from CountReader.lookup(states=True)). Each order's scores are scaled by a
@@ -203,22 +212,32 @@ class HeadMuon(torch.optim.Muon):
         return loss
 
 
-def param_groups(model, optimizer, lr, wd, adam_mult=1.0):
+_GATE_PARAMS = ("count_gate", "count_absent", "count_scale")
+
+
+def param_groups(model, optimizer, lr, wd, adam_mult=1.0, gate_mult=None):
     """Muon takes the 2-D block matrices; AdamW takes embeddings, head and gates.
     With AdamW alone, block matrices get weight decay and the rest none.
-    The rest runs at adam_mult x lr; s2train multiplies each step's rate by the group's lr_mult."""
-    matrices, rest = [], []
+    The rest runs at adam_mult x lr; s2train multiplies each step's rate by the group's lr_mult.
+    gate_mult (Stage 2K2), if given, moves the COUNT gate, absent vectors and read scales into their own AdamW
+    group at gate_mult x lr (no weight decay); None leaves them in the rest, as in Stages 2E to 2K."""
+    matrices, rest, gates = [], [], []
     for name, p in model.named_parameters():
-        (matrices if name.startswith("blocks.") and p.dim() == 2 else rest).append(p)
-    adam_rest = {"params": rest, "weight_decay": 0.0, "lr": lr * adam_mult, "lr_mult": adam_mult}
+        if name.startswith("blocks.") and p.dim() == 2:
+            matrices.append(p)
+        else:
+            (gates if gate_mult is not None and name in _GATE_PARAMS else rest).append(p)
+    adam = [{"params": rest, "weight_decay": 0.0, "lr": lr * adam_mult, "lr_mult": adam_mult}]
+    if gates:
+        adam.append({"params": gates, "weight_decay": 0.0, "lr": lr * gate_mult, "lr_mult": gate_mult})
     if optimizer == "adamw":
-        return [torch.optim.AdamW([{"params": matrices, "weight_decay": wd, "lr": lr}, adam_rest],
+        return [torch.optim.AdamW([{"params": matrices, "weight_decay": wd, "lr": lr}, *adam],
                                   betas=(0.9, 0.95), fused=False)]
     if optimizer == "muon":
         return [torch.optim.Muon(matrices, lr=lr, weight_decay=wd, adjust_lr_fn="match_rms_adamw"),
-                torch.optim.AdamW([adam_rest], betas=(0.9, 0.95))]
+                torch.optim.AdamW(adam, betas=(0.9, 0.95))]
     if optimizer == "muon_head":              # q, k and v of every head as separate blocks
         split = {id(b.qkv.weight): 3 * model.cfg.n_head for b in model.blocks}
         return [HeadMuon(matrices, split, lr=lr, weight_decay=wd, adjust_lr_fn="match_rms_adamw"),
-                torch.optim.AdamW([adam_rest], betas=(0.9, 0.95))]
+                torch.optim.AdamW(adam, betas=(0.9, 0.95))]
     raise ValueError(f"unknown optimizer {optimizer!r}")
