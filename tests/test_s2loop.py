@@ -142,9 +142,7 @@ def test_loop_run_reports_the_loss_at_every_depth(tiny):
         assert e["depths"] == [sample_depth(0, e["step"], k, 4) for k in range(accum)]
 
 
-def test_loop_arch_is_refused_with_a_memory_or_the_wrong_block_count(tiny):
+def test_an_unknown_arch_is_refused(tiny):
     tcfg, tmp = tiny
-    with pytest.raises(ValueError, match="memory"):
-        run("T", 0, TINY, S.dataclasses.replace(tcfg, memory="count"), tmp / "x", CPU)
     with pytest.raises(ValueError, match="arch"):
         run("T", 0, TINY, S.dataclasses.replace(tcfg, arch="ring"), tmp / "y", CPU)

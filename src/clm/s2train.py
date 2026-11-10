@@ -111,8 +111,6 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         raise ValueError(f"unknown memory {tcfg.memory!r}")
     if tcfg.arch not in ("b0", "loop"):
         raise ValueError(f"unknown arch {tcfg.arch!r}")
-    if tcfg.arch == "loop" and tcfg.memory != "none":
-        raise ValueError("the looped arch has no memory arm")
     if tcfg.loop_loss not in ("sampled", "all"):
         raise ValueError(f"unknown loop_loss {tcfg.loop_loss!r}")
     if tcfg.arch != "loop" and (tcfg.loop_gain or tcfg.loop_loss != "sampled"):
@@ -182,7 +180,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
                     depths.append(kw["depth"])
                 with _autocast(device):
                     if all_depths:
-                        per_depth = model.forward_all(x, y)
+                        per_depth = model.forward_all(x, y, count=kw.get("count"))
                         loss = per_depth.mean()
                         by_depth_train += per_depth.detach().float().cpu() / accum
                     else:
@@ -211,7 +209,8 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
                 lookup_seconds.append(data.lookup_seconds)
             if (step + 1) % tcfg.eval_every == 0 or step + 1 == steps:
                 if looped:                                # headline: the deepest readout
-                    by_depth = [evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro, device, depth=r)
+                    by_depth = [evaluate(model, val, mcfg.ctx, tcfg.eval_tokens, tcfg.micro, device, reader, depth=r,
+                                         states=tcfg.count_gate)
                                 for r in range(1, tcfg.loop_max + 1)]
                     rec["val_loss_by_depth"], val_loss = by_depth, by_depth[-1]
                     rec["val_loss"] = val_loss
@@ -230,7 +229,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         return
     commit, dirty = _git()
     arm = (("loop" + ("_gain" if tcfg.loop_gain else "") + ("_all" if all_depths else "")) if looped else "b0" if reader is None else f"count_{bucket_kind}" if bucket_kind
-           else "count" if tcfg.loo else "count_noloo") + ("_gated" if tcfg.count_gate else "_scaled" if tcfg.count_scale else "_oscaled" if tcfg.count_scale_orders else "")
+           else "count" if tcfg.loo else "count_noloo") + ("_count" if looped and reader is not None else "") + ("_gated" if tcfg.count_gate else "_scaled" if tcfg.count_scale else "_oscaled" if tcfg.count_scale_orders else "")
     _write(out / "results.json", {
         "status": "complete", "arm": arm, "size": size, "seed": seed,
         "model": dataclasses.asdict(mcfg), "train": dataclasses.asdict(tcfg),

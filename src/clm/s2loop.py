@@ -39,8 +39,8 @@ class LoopGPT(B0GPT):
         self.max_depth = max_depth
         self.loop_gain = nn.Parameter(torch.ones(max_depth, cfg.d_model)) if gain else None
 
-    def _stem(self, idx):
-        x = rms(self.embed(idx))
+    def _stem(self, idx, count=None):
+        x = self._input(idx, None, count)
         ves = {layer: emb(idx) for layer, emb in zip(self.ve_layers, self.value_embed)}
         for i in (0, 1):
             x = self.blocks[i](x, self.cos, self.sin, ves.get(i))
@@ -60,10 +60,10 @@ class LoopGPT(B0GPT):
         logits = self.head(rms(x)).float()
         return self.cfg.softcap * torch.tanh(logits / self.cfg.softcap)
 
-    def forward(self, idx, targets=None, depth=1):
+    def forward(self, idx, targets=None, depth=1, count=None):
         """depth: an int (every token runs that many passes) or a (batch, time) integer tensor
-        of per-token exit depths, each in 1..max_depth."""
-        x, ves = self._stem(idx)
+        of per-token exit depths, each in 1..max_depth. count: a COUNT read, as B0GPT.forward takes it (Stage 2L)."""
+        x, ves = self._stem(idx, count)
         if isinstance(depth, int):
             if not 1 <= depth <= self.max_depth:
                 raise ValueError(f"depth {depth} outside 1..{self.max_depth}")
@@ -79,9 +79,9 @@ class LoopGPT(B0GPT):
             return logits, None
         return logits, F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
 
-    def forward_all(self, idx, targets):
+    def forward_all(self, idx, targets, count=None):
         """Loss at every depth 1..max_depth from one forward, shape (max_depth,); training minimises its mean."""
-        x, ves = self._stem(idx)
+        x, ves = self._stem(idx, count)
         losses = []
         for r in range(1, self.max_depth + 1):
             x = self._pass(x, r)
@@ -90,10 +90,10 @@ class LoopGPT(B0GPT):
         return torch.stack(losses)
 
     @torch.no_grad()
-    def all_depths(self, idx, targets):
+    def all_depths(self, idx, targets, count=None):
         """Per-token loss at every depth 1..max_depth, (max_depth, batch, time), and the relative change
         ||x_r - x_(r-1)|| / ||x_r|| of the loop state at each pass, also (max_depth, batch, time)."""
-        x, ves = self._stem(idx)
+        x, ves = self._stem(idx, count)
         losses, change = [], []
         for r in range(1, self.max_depth + 1):
             new = self._pass(x, r)

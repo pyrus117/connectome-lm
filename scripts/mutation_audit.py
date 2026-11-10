@@ -462,6 +462,20 @@ MUTANTS = [
      "tests/test_s2k2.py::test_the_read_carried_forward_is_the_best_that_beats_count_and_plain_count_if_none_does"),
     ("M198", "src/clm/rules2k2.py", 'if v == "X_BETTER"]', 'if v in ("X_BETTER", "INCONCLUSIVE")]',
      "tests/test_s2k2.py::test_p20_and_the_carry_forward_do_not_count_an_arm_that_wins_on_average_but_loses_a_seed"),
+    ("M199", "src/clm/s2loop.py", "x = self._input(idx, None, count)", "x = self._input(idx, None, None)",
+     "tests/test_s2l.py::test_the_loop_at_depth_one_reads_the_count_exactly_as_b0_does_for_every_kind_of_read"),
+    ("M200", "src/clm/s2loop.py", 'takes it (Stage 2L)."""\n        x, ves = self._stem(idx, count)', 'takes it (Stage 2L)."""\n        x, ves = self._stem(idx)',
+     "tests/test_s2l.py::test_the_loop_at_depth_one_reads_the_count_exactly_as_b0_does_for_every_kind_of_read"),
+    ("M201", "src/clm/s2loop.py", 'minimises its mean."""\n        x, ves = self._stem(idx, count)', 'minimises its mean."""\n        x, ves = self._stem(idx)',
+     "tests/test_s2l.py::test_the_all_depth_loss_and_the_per_token_readouts_carry_the_read_to_every_depth"),
+    ("M202", "src/clm/s2loop.py", 'also (max_depth, batch, time)."""\n        x, ves = self._stem(idx, count)', 'also (max_depth, batch, time)."""\n        x, ves = self._stem(idx)',
+     "tests/test_s2l.py::test_the_all_depth_loss_and_the_per_token_readouts_carry_the_read_to_every_depth"),
+    ("M203", "src/clm/s2train.py", 'per_depth = model.forward_all(x, y, count=kw.get("count"))', "per_depth = model.forward_all(x, y)",
+     "tests/test_s2l.py::test_a_looped_run_with_a_count_memory_trains_names_its_arm_and_reads_the_counts_when_it_evaluates"),
+    ("M204", "src/clm/s2train.py", "tcfg.micro, device, reader, depth=r,", "tcfg.micro, device, None, depth=r,",
+     "tests/test_s2l.py::test_a_looped_run_with_a_count_memory_trains_names_its_arm_and_reads_the_counts_when_it_evaluates"),
+    ("M205", "src/clm/s2train.py", '("_count" if looped and reader is not None else "")', '""',
+     "tests/test_s2l.py::test_a_looped_run_with_a_count_memory_trains_names_its_arm_and_reads_the_counts_when_it_evaluates"),
 ]
 
 
