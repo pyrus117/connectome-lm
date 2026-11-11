@@ -119,3 +119,9 @@ The same one-line fix is needed in the Linux repo, where the unmodified loader w
 
 All training and inference now run on q-pc, so the two q-pc commits above (applied here with `git am`) are on `stage2`. The Linux code path of each is the same expression as before. The q-pc clone is reset to this branch.
 `scripts/stage2d_analyze.py` now builds the model with `gain=tcfg.loop_gain` and takes an optional output file name as a second argument, so the Stage 2H repeat of the oracle analysis (PREREG_stage2h.md section 7) does not overwrite `results/stage2d.json`. For Stage 2D's own run both defaults give the old behaviour. Test suite 100% and mutation audit 147/147 killed, both required controls as expected, after the merge.
+
+## 2026-11-12: Stage 2L `loop_gain_all_sep-M-0` resumed from its step-11,000 checkpoint after a forced restart of q-pc
+
+q-pc restarted at 17:47 NZ on 2026-11-11 (a Windows update), while `runs2/loop_gain_all_sep-M-0` was between steps 11,000 and 11,238 of 12,207. The driver process died with the restart. The tree was clean at commit f96d054 (`git status` empty), and the checkpoint (`ckpt.pt`, 17:39) was intact. The driver was started again at 12:10 on 2026-11-12 with the same launch script, and the run resumed from step 11,000.
+
+Effect: the steps from 11,000 to about 11,238 ran twice, and `log.jsonl` holds both passes of them. Resuming is bit-identical to an unbroken run in the tests (`tests/test_s2loop.py::test_interrupted_and_resumed_loop_run_ends_bit_identical`, and the Stage 2H resume tests), but a CUDA run on a different driver state is not guaranteed to be; on the Stage 2E precedent the effect is at the level of ordinary run-to-run noise, well below the 0.01 nat bar. No code, config, data or rule changed. The Stage 2L driver also restarted its log (`runs2/stage2l_driver.log` was overwritten); `runs2/stage2l_choice.json` is unchanged (read: count).
