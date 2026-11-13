@@ -66,6 +66,7 @@ class S2TrainConfig:
     loop_max: int = 6             # deepest pass count of the looped arch
     loop_gain: bool = False       # Stage 2H: a learned per-pass, per-channel residual gain in the loop
     loop_loss: str = "sampled"    # "sampled": one random depth per micro-batch (Stage 2D); "all": mean loss over every depth
+    gain_mult: float | None = None     # Stage 2M: loop_gain trains at gain_mult x lr; None = adam_mult
 
 
 def lr_at(step, steps, cfg):
@@ -115,6 +116,8 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
         raise ValueError(f"unknown loop_loss {tcfg.loop_loss!r}")
     if tcfg.arch != "loop" and (tcfg.loop_gain or tcfg.loop_loss != "sampled"):
         raise ValueError("loop_gain and loop_loss belong to the looped arch")
+    if tcfg.gain_mult is not None and not (tcfg.arch == "loop" and tcfg.loop_gain):
+        raise ValueError("gain_mult needs the looped arch with loop_gain")
     if (tcfg.count_gate or tcfg.count_scale or tcfg.count_scale_orders) and tcfg.memory != "count":
         raise ValueError("count_gate and count_scale need memory 'count'")
     if tcfg.count_gate + tcfg.count_scale + tcfg.count_scale_orders > 1:
@@ -136,7 +139,7 @@ def run(size, seed, mcfg, tcfg, out, device, max_steps=None, config_path=None):
     bucket_kind = (json.loads((ROOT / tcfg.bucket_dir / "bucket.json").read_text())["kind"]
                    if reader is not None and tcfg.bucket_dir else None)
     model = (build_loop(mcfg, seed, tcfg.loop_max, tcfg.loop_gain) if looped else build_b0(mcfg, seed)).to(device)
-    opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd, tcfg.adam_mult, tcfg.gate_mult)
+    opts = param_groups(model, tcfg.optimizer, tcfg.lr, tcfg.wd, tcfg.adam_mult, tcfg.gate_mult, tcfg.gain_mult)
     steps = tcfg.tokens // (tcfg.batch * mcfg.ctx)
     if tcfg.batch % tcfg.micro:
         raise ValueError("batch must be a multiple of micro")
@@ -272,6 +275,7 @@ def main():
     ap.add_argument("--count-scale", action="store_true", help="Stage 2K: one learned scalar on the COUNT read (scale-only control)")
     ap.add_argument("--count-scale-orders", action="store_true", help="Stage 2K2: one learned scalar per order on the COUNT read")
     ap.add_argument("--gate-mult", type=float, help="Stage 2K2: gate, absent and scale parameters train at this multiple of --lr")
+    ap.add_argument("--gain-mult", type=float, help="Stage 2M: loop_gain trains at this multiple of --lr")
     ap.add_argument("--prereg", help="pre-registration file whose hash the results record")
     args = ap.parse_args()
     mcfg, tcfg = load_config(args.config, args.size)
@@ -283,7 +287,7 @@ def main():
                                    ("count_gate", True if args.count_gate else None),
                                    ("count_scale", True if args.count_scale else None),
                                    ("count_scale_orders", True if args.count_scale_orders else None),
-                                   ("gate_mult", args.gate_mult)) if v is not None}
+                                   ("gate_mult", args.gate_mult), ("gain_mult", args.gain_mult)) if v is not None}
     tcfg = dataclasses.replace(tcfg, **overrides)
     device = torch.device(args.device)
     if device.type == "cuda":
