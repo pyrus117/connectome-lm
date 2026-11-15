@@ -1,0 +1,27 @@
+{
+  "sizes": {
+    "M": {"vocab": 8192, "ctx": 512, "d_model": 384, "n_layer": 6, "n_head": 6}
+  },
+  "train": {
+    "tokens": 200000000,
+    "batch": 32,
+    "micro": 4,
+    "optimizer": "muon",
+    "lr": 0.008,
+    "adam_mult": 8.0,
+    "wd": 0.1,
+    "warmup": 200,
+    "eval_every": 2000,
+    "eval_tokens": 2097152,
+    "ckpt_every": 500,
+    "memory": "count",
+    "count_dir": "data/count",
+    "count_k": 8,
+    "loo": true,
+    "arch": "loop",
+    "loop_max": 6,
+    "loop_gain": true,
+    "loop_loss": "all",
+    "prereg": "PREREG_stage2n.md"
+  }
+}

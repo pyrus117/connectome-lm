@@ -219,19 +219,22 @@ class HeadMuon(torch.optim.Muon):
 _GATE_PARAMS = ("count_gate", "count_absent", "count_scale")
 
 
-def param_groups(model, optimizer, lr, wd, adam_mult=1.0, gate_mult=None, gain_mult=None):
+def param_groups(model, optimizer, lr, wd, adam_mult=1.0, gate_mult=None, gain_mult=None, head_mult=None):
     """Muon takes the 2-D block matrices; AdamW takes embeddings, head and gates.
     With AdamW alone, block matrices get weight decay and the rest none.
     The rest runs at adam_mult x lr; s2train multiplies each step's rate by the group's lr_mult.
     gate_mult (Stage 2K2), if given, moves the COUNT gate, absent vectors and read scales into their own AdamW
     group at gate_mult x lr (no weight decay); None leaves them in the rest, as in Stages 2E to 2K.
-    gain_mult (Stage 2M) does the same for the looped model's per-pass `loop_gain`."""
-    matrices, rest, gates, gains = [], [], [], []
+    gain_mult (Stage 2M) does the same for the looped model's per-pass `loop_gain`.
+    head_mult (Stage 2N) does the same for `head.weight`."""
+    matrices, rest, gates, gains, heads = [], [], [], [], []
     for name, p in model.named_parameters():
         if name.startswith("blocks.") and p.dim() == 2:
             matrices.append(p)
         elif gain_mult is not None and name == "loop_gain":
             gains.append(p)
+        elif head_mult is not None and name == "head.weight":
+            heads.append(p)
         else:
             (gates if gate_mult is not None and name in _GATE_PARAMS else rest).append(p)
     adam = [{"params": rest, "weight_decay": 0.0, "lr": lr * adam_mult, "lr_mult": adam_mult}]
@@ -239,6 +242,8 @@ def param_groups(model, optimizer, lr, wd, adam_mult=1.0, gate_mult=None, gain_m
         adam.append({"params": gates, "weight_decay": 0.0, "lr": lr * gate_mult, "lr_mult": gate_mult})
     if gains:
         adam.append({"params": gains, "weight_decay": 0.0, "lr": lr * gain_mult, "lr_mult": gain_mult})
+    if heads:
+        adam.append({"params": heads, "weight_decay": 0.0, "lr": lr * head_mult, "lr_mult": head_mult})
     if optimizer == "adamw":
         return [torch.optim.AdamW([{"params": matrices, "weight_decay": wd, "lr": lr}, *adam],
                                   betas=(0.9, 0.95), fused=False)]
