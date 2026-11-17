@@ -1,11 +1,15 @@
 # connectome-lm
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24296168.svg)](https://doi.org/10.5281/zenodo.24296168)
+
 **From Connectome Wiring to Counted Memory and Recurrent Depth: Pre-Registered Tests of *Drosophila* Mushroom-Body Principles in Small Language Models**
 
-*Author: Nate Farrow (Independent Researcher) · November 2026*
+*Author: Nate Farrow (Independent Researcher) · November 2026 · DOI: [`10.5281/zenodo.24296168`](https://doi.org/10.5281/zenodo.24296168)*
 
+- **Permanent Zenodo Record (DOI):** [`https://doi.org/10.5281/zenodo.24296168`](https://doi.org/10.5281/zenodo.24296168)
+- **Full Paper (PDF):** [`paper/connectome-lm-paper.pdf`](paper/connectome-lm-paper.pdf)
+- **Interactive Web Manuscript (HTML + SVG):** [`https://pyrus117.github.io/connectome-lm/paper/`](https://pyrus117.github.io/connectome-lm/paper/) ([`paper/index.html`](paper/index.html))
 - **Full Paper (Markdown with Figures):** [`PAPER.md`](PAPER.md)
-- **Interactive Web Manuscript (HTML + SVG):** [`paper/index.html`](paper/index.html)
 - **LaTeX Source (arXiv / Overleaf):** [`paper/main.tex`](paper/main.tex)
 - **Stage-by-Stage Lab Notes:** [`notes/`](notes/)
 - **Machine-Readable Results:** [`runs/analysis.json`](runs/analysis.json) & [`results/`](results/)

@@ -1,7 +1,7 @@
 # From Connectome Wiring to Counted Memory and Recurrent Depth: Pre-Registered Tests of *Drosophila* Mushroom-Body Principles in Small Language Models
 
 **Nate Farrow (Independent Researcher)**  
-*Date: 17 November 2026 · Repository: `connectome-lm` (commits `feb582e`–`c9e496d`)*
+*Date: 17 November 2026 · DOI: [`10.5281/zenodo.24296168`](https://doi.org/10.5281/zenodo.24296168) · Repository: [`github.com/pyrus117/connectome-lm`](https://github.com/pyrus117/connectome-lm)*
 
 ---
 
