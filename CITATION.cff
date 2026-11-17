@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this research or code, please cite it as below."
+title: "From Connectome Wiring to Counted Memory and Recurrent Depth: Pre-Registered Tests of Drosophila Mushroom-Body Principles in Small Language Models"
+authors:
+  - family-names: "Farrow"
+    given-names: "Nate"
+    affiliation: "Independent Researcher"
+date-released: "2026-11-17"
+version: "1.0.0"
+repository-code: "https://github.com/pyrus117/connectome-lm"
+url: "https://pyrus117.github.io/connectome-lm/paper/"
+license: "MIT"
+keywords:
+  - language-models
+  - connectome
+  - drosophila-mushroom-body
+  - counted-memory
+  - complementary-learning-systems
+  - recurrent-depth
+  - pre-registration

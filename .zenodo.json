@@ -1,0 +1,29 @@
+{
+  "title": "From Connectome Wiring to Counted Memory and Recurrent Depth: Pre-Registered Tests of Drosophila Mushroom-Body Principles in Small Language Models",
+  "upload_type": "publication",
+  "publication_type": "preprint",
+  "publication_date": "2026-11-17",
+  "creators": [
+    {
+      "name": "Farrow, Nate",
+      "affiliation": "Independent Researcher"
+    }
+  ],
+  "description": "Across 16 pre-registered stages (101 production training and evaluation runs, 25 registered predictions P1-P25, and a 218-mutant automated test audit), we systematically test where Drosophila mushroom-body principles help and where they fail in small language models (5M-29M parameters trained on 200M tokens of FineWeb-Edu). We test literal FlyWire v783 mushroom-body connectome wiring (Stages 1 & 2T), counted host-RAM n-gram memory (COUNT) with online leave-one-out subtraction and Kenyon similarity hash backoffs (Stages 2.0-2B, 2E-2K2), gradient-free one-shot associative count writes with context-gated overlays (GatedOverlay) and memory-on KL consistency consolidation (Stages 2C, 2C-2, 2C-3), and recurrent looped depth (LoopGPT) with learned per-pass residual gains and a 2x2 factorial isolating why unembedding head.weight at AdamW 64e-3 explodes 8x in L2 norm and kills recurrent depth (Stages 2D, 2H-2I, 2L-2N).",
+  "access_right": "open",
+  "license": "MIT",
+  "keywords": [
+    "language models",
+    "connectome",
+    "Drosophila mushroom body",
+    "FlyWire",
+    "n-gram memory",
+    "COUNT",
+    "complementary learning systems",
+    "recurrent depth",
+    "looped transformer",
+    "Muon optimizer",
+    "pre-registration",
+    "mutation testing"
+  ]
+}
