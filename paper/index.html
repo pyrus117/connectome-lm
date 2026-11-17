@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From Connectome Wiring to Counted Memory and Recurrent Depth — connectome-lm Research Paper</title>
+<style>
+  :root {
+    --bg: #f8f9fb;
+    --paper: #ffffff;
+    --ink: #18202c;
+    --ink-secondary: #3b4656;
+    --muted: #637083;
+    --line: #dfe4ec;
+    --line-strong: #c5cedb;
+    --accent: #23538f;
+    --accent-soft: #edf3fb;
+    --ok: #1e703a;
+    --ok-bg: #e7f5ec;
+    --bad: #a62c22;
+    --bad-bg: #fceae8;
+    --neutral: #6b520e;
+    --neutral-bg: #fef6df;
+    --code-bg: #f1f4f8;
+    --shadow: 0 2px 12px rgba(20, 30, 48, 0.05);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Georgia", "Charter", "Cambria", "Times New Roman", serif;
+    font-size: 17.5px;
+    line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Top banner */
+  .topbar {
+    background: #141c27;
+    color: #e6ecf5;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.84rem;
+    padding: 9px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    border-bottom: 1px solid #283447;
+  }
+  .topbar .left { display: flex; align-items: center; gap: 14px; }
+  .topbar .pill {
+    background: #25354c;
+    color: #9ec3f7;
+    padding: 2px 9px;
+    border-radius: 99px;
+    font-weight: 600;
+    font-size: 0.76rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .topbar button {
+    background: #23538f;
+    color: #ffffff;
+    border: 1px solid #396eb0;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .topbar button:hover { background: #2c64aa; }
+
+  /* Main layout */
+  .page {
+    max-width: 1320px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    gap: 32px;
+    padding: 28px 24px 96px;
+  }
+
+  /* Sticky TOC sidebar */
+  aside.toc {
+    position: sticky;
+    top: 20px;
+    align-self: start;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 16px 18px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.85rem;
+    line-height: 1.42;
+    box-shadow: var(--shadow);
+  }
+  aside.toc .toc-title {
+    font-weight: 700;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  aside.toc ul { list-style: none; margin: 0; padding: 0; }
+  aside.toc li { margin: 4px 0; }
+  aside.toc li.sub { padding-left: 12px; font-size: 0.81rem; }
+  aside.toc a {
+    display: block;
+    color: var(--ink-secondary);
+    text-decoration: none;
+    padding: 4px 7px;
+    border-radius: 5px;
+  }
+  aside.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+  aside.toc .toc-stats {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  aside.toc .toc-stats div { margin: 3px 0; display: flex; justify-content: space-between; }
+  aside.toc .toc-stats b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  /* Paper sheet */
+  article.manuscript {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 52px 64px 72px;
+    box-shadow: var(--shadow);
+    max-width: 980px;
+  }
+
+  /* Title block */
+  header.paper-header {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 26px;
+    margin-bottom: 30px;
+  }
+  .paper-kicker {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  header.paper-header h1 {
+    font-size: 2.05rem;
+    line-height: 1.24;
+    margin: 0 0 16px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.015em;
+  }
+  .authors {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 1.02rem;
+    color: var(--ink);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .meta-row {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.86rem;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  /* Key KPI strip */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 24px 0 32px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .kpi-card {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .kpi-card.ok { border-top-color: var(--ok); }
+  .kpi-card.bad { border-top-color: var(--bad); }
+  .kpi-card .num {
+    font-size: 1.38rem;
+    font-weight: 700;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .kpi-card .lbl {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.3;
+  }
+
+  /* Abstract box */
+  .abstract-box {
+    background: #f5f7fa;
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 20px 26px;
+    margin: 0 0 36px;
+    font-size: 0.96rem;
+    line-height: 1.62;
+  }
+  .abstract-box h2 {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  .abstract-box p { margin: 0 0 12px; }
+  .abstract-box p:last-child { margin-bottom: 0; }
+
+  /* Headings */
+  h2.sec {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 1.42rem;
+    line-height: 1.3;
+    margin: 44px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  h3.subsec {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 1.12rem;
+    line-height: 1.35;
+    margin: 28px 0 10px;
+    color: var(--ink);
+  }
+  p { margin: 0 0 15px; }
+  ul, ol { margin: 0 0 16px; padding-left: 24px; }
+  li { margin-bottom: 7px; }
+
+  code, .mono {
+    font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.84em;
+    background: var(--code-bg);
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: #1f334d;
+  }
+
+  /* Callout boxes */
+  .finding-box {
+    background: var(--accent-soft);
+    border: 1px solid #c9dcf5;
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 18px 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.92rem;
+    line-height: 1.52;
+  }
+  .finding-box.ok {
+    background: var(--ok-bg);
+    border-color: #bfe3ca;
+    border-left-color: var(--ok);
+  }
+  .finding-box.bad {
+    background: var(--bad-bg);
+    border-color: #f3c4bf;
+    border-left-color: var(--bad);
+  }
+  .finding-box .fb-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--ink);
+  }
+
+  /* Figures */
+  figure.paper-fig {
+    margin: 28px 0;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 16px 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  }
+  figure.paper-fig img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 4px;
+  }
+  figure.paper-fig figcaption {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.84rem;
+    line-height: 1.48;
+    color: var(--ink-secondary);
+  }
+  figure.paper-fig figcaption b { color: var(--ink); }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 20px 0 26px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.84rem;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+  table.data caption {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 0.86rem;
+    background: #f5f7fa;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+  }
+  table.data th, table.data td {
+    padding: 8px 11px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  table.data th {
+    background: #f8f9fb;
+    font-weight: 650;
+    color: var(--ink-secondary);
+    border-bottom: 2px solid var(--line-strong);
+    white-space: nowrap;
+  }
+  table.data th.num, table.data td.num { text-align: right; white-space: nowrap; }
+  table.data tr:last-child td { border-bottom: none; }
+  table.data tr.highlight td { background: #eef6f0; font-weight: 600; }
+  table.data tr.dead td { background: #fdf3f2; }
+  table.data tbody tr:hover td { background: #f3f6fb; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #b7dfc3; }
+  .badge.bad { background: var(--bad-bg); color: var(--bad); border: 1px solid #f0b9b3; }
+  .badge.neutral { background: var(--neutral-bg); color: var(--neutral); border: 1px solid #eed697; }
+
+  /* References */
+  ol.refs {
+    font-size: 0.9rem;
+    line-height: 1.52;
+    color: var(--ink-secondary);
+    padding-left: 22px;
+  }
+  ol.refs li { margin-bottom: 8px; }
+
+  @media (max-width: 1080px) {
+    .page { grid-template-columns: 1fr; }
+    aside.toc { position: static; max-height: none; }
+    article.manuscript { padding: 32px 24px 48px; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media print {
+    body { background: #ffffff; font-size: 11pt; }
+    .topbar, aside.toc { display: none; }
+    .page { display: block; padding: 0; }
+    article.manuscript { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+    figure.paper-fig, .table-wrap { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="left">
+    <span class="pill">Pre-Registered Research Monograph</span>
+    <span><b>connectome-lm</b> · Stages 1 &amp; 2 Complete (16 Pre-Registrations · 25 Predictions P1–P25 · 218/218 Mutants Killed)</span>
+  </div>
+  <div>
+    <button onclick="window.print()">Print / Save as PDF</button>
+  </div>
+</div>
+
+<div class="page">
+  <aside class="toc" aria-label="Table of Contents">
+    <div class="toc-title">Contents</div>
+    <ul>
+      <li><a href="#abstract">Abstract</a></li>
+      <li><a href="#sec1">1. Introduction &amp; Contributions</a></li>
+      <li><a href="#sec2">2. Pre-Registration &amp; Mutation Audit</a></li>
+      <li><a href="#sec3">3. Part I: Connectome Wiring (Stages 1 &amp; 2T)</a></li>
+      <li class="sub"><a href="#sec3-1">3.1 SharedBrain Architecture</a></li>
+      <li class="sub"><a href="#sec3-2">3.2 Why Real Wiring Loses (P1–P2)</a></li>
+      <li><a href="#sec4">4. Part II: Host-RAM COUNT &amp; Kenyon Hash</a></li>
+      <li class="sub"><a href="#sec4-1">4.1 B0 Baseline &amp; Size Ladder (2.0)</a></li>
+      <li class="sub"><a href="#sec4-2">4.2 COUNT, Leave-One-Out &amp; Rates (2A, 2F, 2G)</a></li>
+      <li class="sub"><a href="#sec4-3">4.3 Kenyon Similarity Backoff (2B-0, 2B)</a></li>
+      <li class="sub"><a href="#sec4-4">4.4 Context Gates vs Scalars (2E, 2K, 2K2)</a></li>
+      <li><a href="#sec5">5. Part III: Fast Writes &amp; Consolidation (2C–2C-3)</a></li>
+      <li class="sub"><a href="#sec5-1">5.1 One-Shot Writes &amp; Twins (P7, P8)</a></li>
+      <li class="sub"><a href="#sec5-2">5.2 Teacher &amp; Overlay-Channel Drift</a></li>
+      <li class="sub"><a href="#sec5-3">5.3 Context-Gated Overlay (GatedOverlay)</a></li>
+      <li><a href="#sec6">6. Part IV: Recurrent Depth &amp; Unembedding Collapse</a></li>
+      <li class="sub"><a href="#sec6-1">6.1 LoopGPT, loop_gain &amp; All-Depth (2D, 2H)</a></li>
+      <li class="sub"><a href="#sec6-2">6.2 Effort Law vs Halting Probes (P9, P18)</a></li>
+      <li class="sub"><a href="#sec6-3">6.3 2×2 Factorial: The 64e-3 Killer (2L–2N)</a></li>
+      <li><a href="#sec7">7. Master Ledger (P1–P25)</a></li>
+      <li><a href="#sec8">8. Discussion &amp; Takeaways</a></li>
+      <li><a href="#sec9">9. References</a></li>
+    </ul>
+    <div class="toc-stats">
+      <div><span>Pre-registrations</span><b>16</b></div>
+      <div><span>Production runs</span><b>101</b></div>
+      <div><span>Registered predictions</span><b>P1–P25</b></div>
+      <div><span>Mutation audit</span><b>218 / 218</b></div>
+      <div><span>Best Size-M val loss</span><b>3.2012 nats</b></div>
+    </div>
+  </aside>
+
+  <article class="manuscript">
+    <header class="paper-header">
+      <div class="paper-kicker">Computational Neuroscience &amp; Efficient Language Modelling</div>
+      <h1>From Connectome Wiring to Counted Memory and Recurrent Depth: Pre-Registered Tests of <em>Drosophila</em> Mushroom-Body Principles in Small Language Models</h1>
+      <div class="authors">Nate</div>
+      <div class="meta-row">
+        <span>Independent Researcher, Aotearoa New Zealand</span>
+        <span>·</span>
+        <span>17 November 2026</span>
+        <span>·</span>
+        <span>Repository: <code>connectome-lm</code> (branch <code>stage2</code>, commit <code>1a18351</code>)</span>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card bad">
+          <div class="num">+0.0144 nats</div>
+          <div class="lbl"><b>Stage 1 Connectome Penalty:</b> FlyWire v783 MB wiring loses to degree-preserving shuffles (<code>X_WORSE</code>; 1-step readout delay).</div>
+        </div>
+        <div class="kpi-card ok">
+          <div class="num">−0.1224 nats</div>
+          <div class="lbl"><b>Stage 2G Host-RAM COUNT:</b> Parameter-free n-gram memory (with LOO) at 13.8M matches 29.4M <code>B0-L</code> at 0 extra VRAM.</div>
+        </div>
+        <div class="kpi-card ok">
+          <div class="num">95.4% cut</div>
+          <div class="lbl"><b>Stage 2C-3 GatedOverlay:</b> Context-gating one-shot writes cuts English loss interference (+0.814 → +0.038 nats) with 0.721 recall.</div>
+        </div>
+        <div class="kpi-card ok">
+          <div class="num">3.2012 nats</div>
+          <div class="lbl"><b>Stage 2M/2N Looped + COUNT:</b> Restraining <code>head.weight</code> to 8e-3 prevents 8× norm explosion and reaches −0.2029 nats vs <code>B0-M</code>.</div>
+        </div>
+      </div>
+    </header>
+
+    <section class="abstract-box" id="abstract">
+      <h2>Abstract</h2>
+      <p>
+        Biological neural circuits inspire machine learning both as literal connectivity graphs and as algorithmic motifs—sparse random expansion, homeostatic competition, fast associative memory, and adaptive recurrent computation. Across <b>16 pre-registered stages</b> (101 production training and evaluation runs, <b>25 registered predictions P1–P25</b>, and a <b>218-mutant automated test audit</b>), we systematically test where <em>Drosophila</em> mushroom-body principles help—and where they fail—in small language models (5M–29M parameters trained on 200M tokens of FineWeb-Edu).
+      </p>
+      <p>
+        First, in <b>Stage 1</b> and <b>Stage 2T</b>, replacing a 6-layer transformer's feed-forward networks with a shared recurrent reservoir wired like the adult <em>Drosophila</em> mushroom body (FlyWire v783: 6,293 neurons, 570,682 synapses) performs <b>reliably worse</b> than degree-preserving random shuffles (<code>real − shuf = +0.0126, +0.0147, +0.0160</code> nats/token, verdict <code>X_WORSE</code>) and dense or Erdős–Rényi controls (<code>dense &lt; er &lt; real_randio ≈ shuf &lt; real</code>). While the real connectome has half the effective rank of its shuffles (<code>0.48×</code>), its full-brain activity participation ratio equals the shuffles (<code>real ÷ shuf = 1.00</code>, refuting P1); instead, its three-layer anatomical routing (ALPN → KC → MBON) leaves only <b>19.5%</b> of readout neurons one hop from an input (versus <b>95.5%</b> in degree-preserving shuffles), delaying readout dimensionality by one recurrent step.
+      </p>
+      <p>
+        Second, in <b>Stages 2.0–2B and 2E–2K2</b>, we replace literal connectome wiring with a counted host-RAM <i>n</i>-gram memory (<b>COUNT</b>, orders 2–5 over 881M tokens, 5.15 GiB host RAM, zero GPU parameters) and test a mushroom-body similarity backoff (<b>Kenyon hash</b>: fixed PPMI token codes, sparse random expansion <i>K</i> = 31, homeostatic <i>k</i>-winners-take-all into 4.19M buckets). Online <b>leave-one-out</b> count subtraction during training is essential (preventing a <b>+0.84 nat</b> validation collapse from target leakage). On equally tuned separate learning rates (Muon <code>8e-3</code> on block matrices, AdamW <code>64e-3</code> on embeddings and head), plain COUNT lowers 13.8M-parameter (<code>Size M</code>) validation loss by <b>−0.1224 nats</b> (<code>3.3853 → 3.2629</code>, <code>X_BETTER</code>, P12–P13), matching a <b>29.4M-parameter (<code>Size L</code>)</b> baseline at <code>+3.4%</code> step time and zero additional VRAM. However, while the Kenyon similarity backoff improves an offline <i>n</i>-gram model on unseen and rare histories (<code>+0.0151</code> and <code>+0.0130</code> nats, P5 supported), that gain <b>vanishes inside the neural network</b> (<code>+0.0046</code> nats vs plain COUNT, <code>NO_MEANINGFUL_DIFFERENCE</code>, P4 refuted). Likewise, learned per-order/per-bin gates and scalar controls (Stages 2E, 2K, 2K2) fail to beat plain COUNT once embeddings and the unembedding head train at <code>64e-3</code> (P19–P20 refuted).
+      </p>
+      <p>
+        Third, in <b>Stages 2C, 2C-2, and 2C-3</b>, we test complementary learning systems (CLS) using gradient-free one-shot count writes (<code>Overlay</code>) followed by KL-anchored replay consolidation into slow weights. One-shot writes learn 4 sequential lists of 384 cue–answer pairs (1,536 pairs) with <b>0.760 recall</b> and <b>zero catastrophic forgetting</b> (<code>backward transfer = 0.000</code> vs <code>−0.330</code> and <code>−0.651</code> for gradient fine-tuning, P7 supported). We show that standard sequential replay consolidation collapses (<code>0.061</code> recall) due to <b>teacher drift</b> (Stage 2C-2, <code>+0.704</code> recovery with an untouched teacher) and <b>overlay-channel drift</b> (Stage 2C-3, H1a supported: consolidating with the overlay off de-calibrates the backbone's memory-reading pathway, dropping recall on an unseen 5th list from <code>0.797</code> to <code>0.177</code>). Adding a <b>memory-on KL consistency loss</b> restores both memory-off (<code>0.731</code>) and memory-on (<code>0.750</code>) consolidated recall while preserving unseen-list reading (<code>0.763</code>). Furthermore, gating test-time overlay writes by stored <i>n</i>-gram history counts (<code>GatedOverlay</code>) preserves <b>100% of quiz recall (<code>0.7602</code>) while cutting English validation loss interference by 81.0%</b> at <i>C</i>(<i>h</i><sub>3</sub>) ≤ 0, and cuts interference by <b>95.4% (<code>+0.038</code> nats)</b> at <i>C</i>(<i>h</i><sub>2</sub>) ≤ 9.
+      </p>
+      <p>
+        Fourth, in <b>Stages 2D, 2H, 2I, and 2L–2N</b>, we study recurrent depth (<code>LoopGPT</code>: 2 prelude blocks, a shared 2-block core looped <i>r</i> ∈ {1..6} times, 2 coda blocks). While exact token-level optimal halting scales affinely with log-effort (P9 supported, <i>R</i><sup>2</sup> = 0.957–0.993) and beats fixed depth by <code>0.0626</code> nats, <b>no deployable causal halting rule</b> (state-change, entropy, margin, or ridge-regression state probes) beats fixed depth by <code>0.01</code> nats (P18 refuted; linear probes explain &lt;1% of next-pass benefit variance, and entropy exiting is <code>X_WORSE</code> by <code>−0.0305</code> nats). Training with a <b>learned per-pass residual gain (<code>loop_gain</code>) and all-depth loss</b> (Stage 2H, P17 supported) lowers validation loss by <b>−0.0384 nats</b> (<code>3.3720 → 3.3336</code>) and learns to damp passes 5–6 to zero automatically, so fixed depth 3 captures <b>99.2%</b> of the 6-pass gain. Finally, through a pre-registered 2×2 factorial (Stages 2M–2N, P22–P25), we prove that training the untied <code>head.weight</code> at <code>64e-3</code> with zero weight decay causes an <b>8× L2 norm explosion (&gt;5,200 vs ~730)</b> that locks the shared readout to pass 1 and kills recurrent depth. Restraining <code>head.weight</code> to <code>8e-3</code> (<code>SHARED</code> and <code>HEADLOW</code>) revives the loop (<code>+0.0376</code> and <code>+0.0309</code> nats loop benefit) and achieves <b>3.2012 nats</b> (<code>3.2015</code> at depth 3)—a <b>−0.2029 nat</b> total reduction below the <code>B0-M</code> baseline (<code>3.4041</code>) at identical GPU parameter count.
+      </p>
+    </section>
+
+    <h2 class="sec" id="sec1">1. Introduction and Summary of Contributions</h2>
+    <p>
+      Small language models trained on consumer hardware face two hard walls: <b>GPU memory (VRAM)</b> and <b>parameter capacity</b>. Biological nervous systems—such as the <em>Drosophila melanogaster</em> mushroom body (MB)—operate under tight physical constraints using three recurring architectural motifs:
+    </p>
+    <ol>
+      <li><b>Specific synaptic connectivity vs sparse random expansion:</b> Olfactory projection neurons (ALPNs) project onto a larger population of Kenyon cells (KCs) governed by global anterior paired lateral (APL) inhibition and homeostatic firing-rate thresholds, which in turn project to mushroom body output neurons (MBONs) modulated by dopaminergic neurons (DANs) (Dasgupta et al., 2017; Litwin-Kumar et al., 2017).</li>
+      <li><b>Complementary fast associative writes and slow consolidation:</b> KCs write one-shot associations into KC→MBON synapses without catastrophic overwriting of prior memories, while offline replay consolidates associations into slower cortical/backbone representations (McClelland et al., 1995; Bennett et al., 2021).</li>
+      <li><b>Recurrent iterative refinement:</b> Shared circuit blocks refine representations over multiple recurrent passes when single-pass processing is insufficient.</li>
+    </ol>
+    <p>
+      In this study, we ask: <b>Which of these principles genuinely improve a transformer language model at the 5M–29M parameter scale on a single 4–8 GB GPU, when subjected to strict pre-registration, paired multi-seed decision rules, and automated mutation auditing?</b>
+    </p>
+
+    <h2 class="sec" id="sec2">2. Methodology, Pre-Registration Discipline, and Mutation Auditing</h2>
+    <p>
+      Every experimental stage (<code>Stage 1</code>, <code>Stage 2.0</code>, and <code>Stages 2A</code> through <code>2N</code>) was governed by a committed <code>PREREG_*.md</code> file whose SHA-256 digest and git commit hash were recorded inside every run's <code>results.json</code> output (with <code>git_dirty: false</code> enforced by the analysis scripts).
+    </p>
+    <ul>
+      <li><b>Smallest Effect Size of Interest (SESOI):</b> Fixed before Stage 1 and confirmed in Stage 2.0 (where <code>2 × SD(B0-M) = 0.0054</code> nats, so the pre-set floor binds) at <b>SESOI = 0.01 nats/token</b>.</li>
+      <li><b>Paired multi-seed verdict rule (<code>src/clm/analyze.py</code>):</b> Given paired seeds <i>s</i> ∈ {0, 1, 2} (or 5 seeds <i>s</i> ∈ {0..4}) and per-seed difference <i>d<sub>s</sub></i> = <i>L<sub>X</sub></i>(<i>s</i>) − <i>L<sub>Y</sub></i>(<i>s</i>) (where lower cross-entropy is better):
+        <ul>
+          <li><span class="badge ok">X_BETTER</span>: mean(<i>d</i>) ≤ −0.01 and <i>d<sub>s</sub></i> &lt; 0 for every seed <i>s</i>.</li>
+          <li><span class="badge bad">X_WORSE</span>: mean(<i>d</i>) ≥ +0.01 and <i>d<sub>s</sub></i> &gt; 0 for every seed <i>s</i>.</li>
+          <li><span class="badge neutral">NO_MEANINGFUL_DIFFERENCE</span>: |mean(<i>d</i>)| &lt; 0.01 and |<i>d<sub>s</sub></i>| &lt; 0.02 for every seed <i>s</i>.</li>
+          <li><span class="badge neutral">INCONCLUSIVE</span>: any other finite outcome.</li>
+        </ul>
+      </li>
+      <li><b>Automated Mutation Audit (<code>218 / 218</code> mutants killed):</b> Alongside 350+ unit tests in <code>tests/</code>, <code>scripts/mutation_audit.py</code> programmatically plants <b>218 single-line bugs (M1–M222)</b> across <code>src/clm/</code> (e.g., off-by-one leave-one-out subtraction, validation document leakage into count tables, stale prefetch buffers, or mis-routed optimizer parameter groups) and requires the targeted pytest suite to fail by <code>AssertionError</code> on every single mutant.</li>
+    </ul>
+
+    <h2 class="sec" id="sec3">3. Part I: Literal Connectome Wiring vs Controls (Stage 1 &amp; Stage 2T)</h2>
+    <h3 class="subsec" id="sec3-1">3.1 Stage 1 SharedBrain Architecture and Experimental Design</h3>
+    <p>
+      Stage 1 tested whether replacing the feed-forward networks (FFNs) of a 6-layer pre-norm GPT (<code>d_model = 256</code>, 4 heads, <code>ctx = 256</code>, BPE vocabulary 8,192, tied embeddings, ~5.11M total parameters) with a single <b>shared recurrent reservoir (<code>SharedBrain</code>)</b> wired according to the adult <em>Drosophila</em> mushroom body improves validation cross-entropy over degree-preserving random rewirings at equal parameters, tokens, data order, and fan-in initialisation.
+    </p>
+
+    <figure class="paper-fig">
+      <img src="../docs/architecture_as_built.svg" alt="Stage 1 connectome-lm Architecture as Built">
+      <figcaption><b>Figure 0 (Architecture as Built — Stage 1):</b> A 6-layer pre-norm GPT with no FFNs. At each layer <i>l</i> ∈ {0..5}, after causal self-attention, a per-layer projection <code>w_in</code> writes into the 256 lowest in-degree brain neurons, the 6,293-neuron FlyWire v783 mushroom body takes one leaky step (leak 0.5, GELU, RMS-normalised across all neurons), and <code>w_out</code> reads the 256 highest in-degree neurons back into the residual stream.</figcaption>
+    </figure>
+
+    <h3 class="subsec" id="sec3-2">3.2 Stage 1 and Stage 2T Results: Why Literal Connectome Wiring Loses</h3>
+    <figure class="paper-fig">
+      <img src="../docs/figures/fig1_stage1_connectome.svg" alt="Figure 1: Stage 1 Connectome Wiring vs Controls and Stage 2T Participation Ratio">
+      <figcaption><b>Figure 1 (Stage 1 &amp; Stage 2T):</b> <b>(A)</b> Validation cross-entropy across the five connectome arms at 200M tokens. The primary contrast (<code>real − shuf</code>) is <code>+0.0126, +0.0147, +0.0160</code> nats (verdict <code>X_WORSE</code>), and clean seeds (0, 2) follow the Litwin-Kumar et al. (2017) plasticity-density prediction: <code>dense (3.894) &lt; er (3.921) &lt; real_randio (3.930) ≈ shuf (3.933) &lt; real (3.947)</code>. <b>(B)</b> Layer-by-layer participation ratio PR = (tr <i>C</i>)<sup>2</sup> / tr(<i>C</i><sup>2</sup>) in Stage 2T: full-brain PR is identical between <code>real</code> and <code>shuf</code> by Layer 6 (refuting P1), but <code>real</code> readout PR lags by one recurrent step across Layers 2–4 because only 19.5% of readout neurons are 1 hop from an input (ALPN → KC → MBON). </figcaption>
+    </figure>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>Table 1: Stage 1 Validation Cross-Entropy (200M Tokens) and Stage 2T Mechanistic Metrics (3-Seed Means).</caption>
+        <thead>
+          <tr>
+            <th>Arm</th>
+            <th>Topology (Neurons / Synapses)</th>
+            <th class="num">Seed 0</th>
+            <th class="num">Seed 1</th>
+            <th class="num">Seed 2</th>
+            <th class="num">Clean Mean (0, 2)</th>
+            <th class="num">Full-Brain PR (L6)</th>
+            <th class="num">Readout PR (L2, L3, L6)</th>
+            <th class="num">1-Hop Input→Readout</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlight">
+            <td><code>dense</code></td>
+            <td>760 / 577,600 (FCN control)</td>
+            <td class="num">3.8949</td>
+            <td class="num">4.0377*</td>
+            <td class="num">3.8939</td>
+            <td class="num">3.8944</td>
+            <td class="num">57.2</td>
+            <td class="num">44.8, 62.9, 68.0</td>
+            <td class="num">100.0%</td>
+          </tr>
+          <tr>
+            <td><code>er</code></td>
+            <td>6,293 / 570,682 (Erdős–Rényi)</td>
+            <td class="num">3.9224</td>
+            <td class="num">4.0155*</td>
+            <td class="num">3.9190</td>
+            <td class="num">3.9207</td>
+            <td class="num">43.9</td>
+            <td class="num">42.3, 56.4, 55.9</td>
+            <td class="num">99.2%</td>
+          </tr>
+          <tr>
+            <td><code>real_randio</code></td>
+            <td>6,293 / 570,682 (Real edges, rand I/O)</td>
+            <td class="num">3.9309</td>
+            <td class="num">3.9973*</td>
+            <td class="num">3.9295</td>
+            <td class="num">3.9302</td>
+            <td class="num">36.9</td>
+            <td class="num">41.0, 47.3, 48.3</td>
+            <td class="num">91.4%</td>
+          </tr>
+          <tr>
+            <td><code>shuf</code></td>
+            <td>6,293 / 570,682 (Degree-preserving)</td>
+            <td class="num">3.9350</td>
+            <td class="num">3.9359</td>
+            <td class="num">3.9309</td>
+            <td class="num">3.9329</td>
+            <td class="num">31.1</td>
+            <td class="num">42.8, 56.9, 55.5</td>
+            <td class="num">95.5%</td>
+          </tr>
+          <tr class="dead">
+            <td><code>real</code></td>
+            <td>6,293 / 570,682 (FlyWire v783 MB)</td>
+            <td class="num">3.9476</td>
+            <td class="num">3.9507</td>
+            <td class="num">3.9468</td>
+            <td class="num">3.9472</td>
+            <td class="num">30.9</td>
+            <td class="num"><b>13.7, 29.1</b>, 56.6</td>
+            <td class="num"><b>19.5%</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finding-box bad">
+      <div class="fb-title">Key Finding 1 (Stages 1 &amp; 2T): Anatomical Two-Hop Routing Delays Readout by One Brain Step</div>
+      Although the FlyWire mushroom-body adjacency matrix has half the singular-value effective rank of its degree-preserving shuffles (<code>0.48×</code>), full-brain activity dimension at Layer 6 is identical (<code>real ÷ shuf = 1.00</code>, refuting P1). Instead, because the biological circuit routes olfactory inputs (<code>ALPN</code>) through Kenyon cells (<code>KC</code>) before reaching output neurons (<code>MBON/DAN</code>), only <b>19.5%</b> of readout neurons in <code>real</code> lie one synaptic hop from an input (236 direct edges vs 1,788 in <code>shuf</code>). Under 1-step-per-layer stepping, <code>real</code> loses roughly one of its six recurrent layers of readout signal.
+    </div>
+
+    <h2 class="sec" id="sec4">4. Part II: Counted Host-RAM Memory, Leave-One-Out, and Fly-Hash Backoff (Stages 2.0–2B, 2E–2K2)</h2>
+
+    <h3 class="subsec" id="sec4-1">4.1 Stage 2.0: Modern Speedrun Baseline (<code>B0</code>) and Scaling Ladder</h3>
+    <p>
+      Stage 2 replaced the slow sparse reservoir (~2,400 tokens/s) with a fast modern transformer baseline (<b><code>B0</code></b>: pre-norm decoder, context 512, vocab 8,192, RMSNorm without gain, RoPE, QK-norm, ReLU<sup>2</sup> MLP, zero-initialised output projections, untied <code>head.weight</code>, value embeddings at first and last layers with gated skips, logit softcap at 30). A 50M-token pilot showed Muon at <code>lr = 8e-3</code> (<code>3.6649</code>) beat tuned AdamW (<code>3.8113</code>) by <b>−0.1464 nats</b>. Training <code>B0-S</code> (<code>6.82M</code> params: <code>3.5198</code> nats), <code>B0-M</code> (<code>13.76M</code> params: <code>3.4041</code> nats, seed SD <code>0.0027</code>), and <code>B0-L</code> (<code>29.36M</code> params: <code>3.2610</code> nats) for 200M tokens established the scaling curve <i>L</i>(<i>N</i>) = 8.031 <i>N</i><sup>−0.05235</sup>.
+    </p>
+
+    <h3 class="subsec" id="sec4-2">4.2 Stages 2A, 2F, and 2G: Host-RAM <code>COUNT</code>, Leave-One-Out, and Separate Rates</h3>
+    <p>
+      Following Magnusson et al. (2026), we counted <i>n</i>-gram continuations of orders 2–5 (histories of 1–4 tokens, minimum counts <i>c</i><sub>min</sub> = (1, 1, 2, 2), top-16 continuations) over all <code>881,048,239</code> training-split tokens of FineWeb-Edu shard 000 into <code>5.15 GiB</code> of host RAM. A background CPU thread prefetches the stupid-backoff-weighted continuation distribution and projects it through the model's untied <code>head.weight</code> into the token embedding with √<i>d</i> LayerNorm amplification.
+    </p>
+
+    <div class="finding-box ok">
+      <div class="fb-title">Key Finding 2 (Stages 2A, 2F, 2G): Leave-One-Out Prevents a +0.84-Nat Leakage Collapse, and Separate Rates Give −0.1224 Nats</div>
+      Because the 200M-token training stream is a subset (1 / 4.405) of the 881M-token count corpus, omitting online <b>leave-one-out (LOO)</b> subtraction during training caused the model to memorise targets directly from rare history counts (training loss <code>2.3967</code>, validation loss <code>4.1612</code> — <b>+0.8391 nats worse</b> than with LOO at <code>3.3221</code>). Decoupling AdamW (<code>64e-3</code>) from Muon (<code>8e-3</code>) in Stages 2F–2G lowered <code>COUNT-M</code> loss by <b>−0.0614 nats</b> (P12) and widened the paired <code>COUNT-M</code> vs <code>B0-M</code> lead to <b>−0.1224 nats</b> (<code>3.2629</code> vs <code>3.3853</code>, P13 <code>X_BETTER</code>), matching the 2.13× larger <code>B0-L</code> (<code>3.2610</code>) at +3.4% step time and zero GPU VRAM.
+    </div>
+
+    <figure class="paper-fig">
+      <img src="../docs/figures/fig2_memory_ladder_and_classes.svg" alt="Figure 2: Size Ladder vs Host-RAM COUNT and Memory Effect by 4-Token History Count Class">
+      <figcaption><b>Figure 2 (Stages 2.0, 2A, 2B, 2E, 2G, 2M, 2N):</b> <b>(A)</b> The <code>B0</code> parameter scaling ladder versus <code>COUNT-M</code> and <code>LOOP+COUNT</code> at Size M (13.76M non-embedding parameters). <b>(B)</b> Validation cross-entropy difference vs <code>B0-M</code> across exact 4-token history frequency classes: <code>COUNT</code> wins by −0.22 nats on stored <code>1–9</code> and <code>10–99</code> histories, while neither Kenyon similarity buckets (Stage 2B) nor learned gates (Stage 2E) eliminate the small penalty on unseen (<code>not stored</code>) histories.</figcaption>
+    </figure>
+
+    <h3 class="subsec" id="sec4-3">4.3 Stages 2B-0 and 2B: Why the Mushroom-Body Kenyon Similarity Backoff Vanishes in the Network</h3>
+    <p>
+      To test whether a mushroom-body similarity hash can supply backoff counts on the 47.3% of validation positions whose 4-token history is unseen, Stage 2B-0 and Stage 2B projected concatenated 64-dim PPMI token codes through a sparse random projection (<i>K</i> = 31 inputs per cell, <code>K31</code>) into two sub-codebooks of 2,048 homeostatically balanced Kenyon cells (4.19M product buckets per order).
+    </p>
+    <ul>
+      <li><b>Offline <i>n</i>-gram pre-test (Stage 2B-0):</b> Sweeping <i>K</i> ∈ {1, 3, 7, 15, 31, dense} confirmed Litwin-Kumar et al.'s (2017) saturation prediction (<span class="badge ok">P5 SUPPORTED</span>: bucket quality improved by 0.0052 nats from <i>K</i>=1 to <i>K</i>=31 and saturated from <i>K</i>=7 to dense). On the 871M-token offline evaluation, Kenyon buckets lowered cross-entropy on unseen and <code>1–9</code> histories by <b>−0.0151 and −0.0130 nats</b> (vs <code>0.0001</code> for random hash buckets), narrowly missing the pre-registered <code>0.0200</code>-nat Gate 2 bar.</li>
+      <li><b>In-network test (Stage 2B):</b> Training 200M-token networks with <code>COUNT + Kenyon K31</code> and <code>COUNT + random buckets</code> yielded <span class="badge neutral">NO_MEANINGFUL_DIFFERENCE</span> on all contrasts: <code>Kenyon − COUNT = +0.0046</code> nats, <code>random − COUNT = +0.0040</code> nats, and <code>Kenyon − random = +0.0007</code> nats (<span class="badge bad">P4 REFUTED</span>). Filling empty exact slots with pooled bucket counts degraded unseen-history loss by <code>+0.0085</code> nats, indicating that replacing a clean zero ("exact history absent") vector with pooled counts removes a useful absence signal without adding distributional information beyond what the transformer's attention layers already compute.</li>
+    </ul>
+
+    <h3 class="subsec" id="sec4-4">4.4 Stages 2E, 2K, and 2K2: Learned Context Gates vs Scalar Controls</h3>
+    <p>
+      In Stage 2E (shared learning rate <code>0.032</code>), adding a 1,568-parameter per-order, per-source, per-bin gate plus absent-history vectors beat plain <code>COUNT</code> by <b>−0.0111 nats</b> (<span class="badge ok">P10 SUPPORTED</span>), while <code>Kenyon-gated</code> lost to <code>gated</code> by <code>+0.0035</code> nats (<span class="badge bad">P11 REFUTED</span>). However, the learned exact gates grew to <b>13–90×</b> their initial value of 1.0, confounding structural bin-weighting with overall scale amplification. Re-testing the gated read against 1-scalar (<code>COUNT-scaled</code>) and 4-scalar (<code>COUNT-oscaled</code>) controls on the superior separate-rate recipe (<code>Muon 8e-3 / AdamW 64e-3</code>) in <b>Stage 2K</b> (gates at <code>64e-3</code>, 3 seeds) and <b>Stage 2K2</b> (gates at <code>8e-3</code>, 5 seeds) showed that plain parameter-free <code>COUNT</code> beat every gated and scaled variant (<span class="badge bad">P19 &amp; P20 REFUTED</span>; mean gaps <code>+0.0461</code> and <code>+0.0770</code> at <code>64e-3</code>; <code>+0.0147</code>, <code>+0.0261</code>, and <code>+0.0169</code> across 5 seeds at <code>8e-3</code>).
+    </p>
+
+    <h2 class="sec" id="sec5">5. Part III: Complementary Learning Systems — One-Shot Writes, Consolidation, and Context Gating (Stages 2C, 2C-2, 2C-3)</h2>
+
+    <h3 class="subsec" id="sec5-1">5.1 Stage 2C: Gradient-Free One-Shot Writes (P7) and Kenyon Twin Transfer (P8)</h3>
+    <p>
+      On the frozen <code>COUNT-M</code> checkpoint, incrementing a cue token's count for a target answer token adds that target's <code>head.weight</code> row (scaled by write weight <i>w</i> = 4.0) to the memory read without gradients (<code>Overlay</code>). Across 4 sequential lists of 384 cue–answer pairs (1,536 pairs total), one-shot <code>write</code> achieved <b>0.760 mean recall</b> with <b>0.000 backward forgetting</b> (<span class="badge ok">P7 SUPPORTED</span>), whereas gradient fine-tuning suffered severe forgetting (<code>−0.330</code> on <code>B0-M</code>, <code>−0.651</code> on <code>COUNT-M</code>) and wrecked English validation loss (<code>3.362 → 10.45–12.62</code> nats). On 512 semantic twin cues, writing into the Kenyon 1-token hash overlay preserved stored-twin recall (<code>0.778</code>) and discrimination (<code>0.793</code>) while transferring answers to <b>3.0% of unwritten twins</b> (<span class="badge ok">P8 SUPPORTED</span>).
+    </p>
+
+    <h3 class="subsec" id="sec5-2">5.2 Stages 2C-2 and 2C-3: Diagnosing Teacher Drift and Overlay-Channel Drift</h3>
+    <figure class="paper-fig">
+      <img src="../docs/figures/fig3_cls_consolidation.svg" alt="Figure 3: Test-Time Writes, Replay Consolidation Repair, and Context-Gated Overlay Trade-off">
+      <figcaption><b>Figure 3 (Stages 2C, 2C-2, 2C-3):</b> <b>(A)</b> Quiz recall across 4 sequential lists (slow weights / primary in blue, overlay ON in teal) and recall on an unconsolidated 5th list (red diamonds). Standard consolidation fails due to rolling-teacher drift (Stage 2C: 0.061) and overlay-channel drift (Stage 2C-2 <code>orig_teacher</code>: 0.763 memory-off, but 0.410 memory-on and 0.177 on the 5th list); adding memory-on KL consistency (Stage 2C-3) restores all three (0.731, 0.750, 0.763). <b>(B)</b> Context-gated overlay writes (<code>GatedOverlay</code>) eliminate 81.0% to 95.4% of the English validation loss rise while preserving quiz recall.</figcaption>
+    </figure>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>Table 2: Sequential List Learning, Replay Consolidation Variants, and Context-Gated Overlays (Stages 2C, 2C-2, 2C-3; 3 Task Seeds).</caption>
+        <thead>
+          <tr>
+            <th>Stage &amp; Arm</th>
+            <th>Mechanism / Gate Rule</th>
+            <th class="num">Memory-Off / Primary Recall</th>
+            <th class="num">Backward Transfer</th>
+            <th class="num">Memory-On Recall</th>
+            <th class="num">Unseen 5th-List Recall</th>
+            <th class="num">English Val Loss (Start 3.362)</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="dead">
+            <td>2C <code>gradient_b0</code></td>
+            <td>Fine-tune B0-M weights (300 steps/list)</td>
+            <td class="num">0.753</td>
+            <td class="num">−0.330</td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td class="num">10.451 (+7.02)</td>
+            <td><span class="badge bad">Forgets &amp; Wrecks LM</span></td>
+          </tr>
+          <tr class="dead">
+            <td>2C <code>gradient_count</code></td>
+            <td>Fine-tune COUNT-M weights (300 steps/list)</td>
+            <td class="num">0.512</td>
+            <td class="num">−0.651</td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td class="num">12.624 (+9.26)</td>
+            <td><span class="badge bad">Forgets &amp; Wrecks LM</span></td>
+          </tr>
+          <tr>
+            <td>2C <code>write</code></td>
+            <td>1-shot count overlay (<i>w</i> = 4.0, ungated)</td>
+            <td class="num">—</td>
+            <td class="num"><b>0.000</b></td>
+            <td class="num"><b>0.760</b></td>
+            <td class="num">0.797</td>
+            <td class="num">4.175 (+0.814)</td>
+            <td><span class="badge ok">P7 Supported</span></td>
+          </tr>
+          <tr class="dead">
+            <td>2C <code>consolidate</code></td>
+            <td>KL replay from rolling teacher (mem off)</td>
+            <td class="num">0.061</td>
+            <td class="num">−0.251</td>
+            <td class="num">0.040</td>
+            <td class="num">—</td>
+            <td class="num">3.392 (+0.030)</td>
+            <td><span class="badge bad">Fails (Teacher Drift)</span></td>
+          </tr>
+          <tr>
+            <td>2C-2 <code>orig_teacher</code></td>
+            <td>KL replay from untouched teacher (no mem-KL)</td>
+            <td class="num"><b>0.763</b></td>
+            <td class="num">+0.028</td>
+            <td class="num">0.410</td>
+            <td class="num"><b>0.177</b></td>
+            <td class="num">3.395 (+0.033)</td>
+            <td><span class="badge neutral">Channel Drift (H1a)</span></td>
+          </tr>
+          <tr class="highlight">
+            <td>2C-3 <code>orig_teacher + mem_kl</code></td>
+            <td>Untouched teacher + memory-on KL consistency</td>
+            <td class="num"><b>0.731</b></td>
+            <td class="num"><b>+0.019</b></td>
+            <td class="num"><b>0.750</b></td>
+            <td class="num"><b>0.763</b></td>
+            <td class="num"><b>3.393 (+0.031)</b></td>
+            <td><span class="badge ok">Passes All 4 Rules</span></td>
+          </tr>
+          <tr class="highlight">
+            <td>2C-3 <code>write_gated_k3_c0</code></td>
+            <td>1-shot write gated by <i>C</i>(<i>h</i><sub>3</sub>) ≤ 0 (<code>order4</code>)</td>
+            <td class="num">—</td>
+            <td class="num"><b>0.000</b></td>
+            <td class="num"><b>0.760</b></td>
+            <td class="num">—</td>
+            <td class="num"><b>3.516 (+0.154)</b></td>
+            <td><span class="badge ok">−81.0% LM Penalty</span></td>
+          </tr>
+          <tr class="highlight">
+            <td>2C-3 <code>write_gated_k2_c9</code></td>
+            <td>1-shot write gated by <i>C</i>(<i>h</i><sub>2</sub>) ≤ 9 (<code>order3</code>)</td>
+            <td class="num">—</td>
+            <td class="num"><b>0.000</b></td>
+            <td class="num"><b>0.721</b></td>
+            <td class="num">—</td>
+            <td class="num"><b>3.399 (+0.038)</b></td>
+            <td><span class="badge ok">−95.4% LM Penalty</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="subsec" id="sec5-3">5.3 Stage 2C-3 Part 4b: Context-Gated Overlay Writes (<code>GatedOverlay</code>)</h3>
+    <p>
+      Suppressing the 1-token overlay write whenever the surrounding 3-token context is present in the corpus <code>order4</code> table (<i>C</i>(<i>h</i><sub>3</sub>) ≥ 2, <code>write_gated_k3_c0</code>) preserves <b>100.0% of quiz recall (0.7602 vs 0.7602 on every seed)</b> while cutting the English validation loss rise by <b>81.0% (+0.814 → +0.154 nats)</b>. Suppressing whenever the 2-token context has count ≥ 10 (<code>write_gated_k2_c9</code>) keeps recall at <b>0.721</b> while cutting the English penalty by <b>95.4% (+0.038 nats, clearing the ≤ 0.05 low-interference bar)</b>.
+    </p>
+
+    <h2 class="sec" id="sec6">6. Part IV: Recurrent Depth, Halting Frontiers, and the <code>head.weight</code> Collapse (Stages 2D, 2H–2I, 2L–2N)</h2>
+
+    <h3 class="subsec" id="sec6-1">6.1 Stages 2D and 2H: Stabilizing Looped Transformers with <code>loop_gain</code> and All-Depth Loss</h3>
+    <p>
+      In <code>LoopGPT</code> (2 prelude blocks, a shared 2-block recurrent core run <i>r</i> ∈ {1..6} times, 2 coda blocks), training at one random depth per batch (Stage 2D <code>reference</code>) reached <code>3.3720</code> best-depth loss at depth 4, but degraded at depths 5 and 6. Adding a learned per-pass per-channel residual gain (<code>loop_gain</code>, 6 × 384) and training on the mean loss across all six depths (Stage 2H <code>both</code>) lowered validation loss by <b>−0.0384 nats</b> (<code>3.3336</code> vs <code>3.3720</code>, <span class="badge ok">P17 SUPPORTED</span>) and learned to damp passes 5 and 6 to zero automatically (mean |<i>g<sub>r</sub></i>|: <code>0.43, 0.31, 0.20, 0.06, 0.01, 0.002</code>).
+    </p>
+
+    <figure class="paper-fig">
+      <img src="../docs/figures/fig4_loop_depth_and_halting.svg" alt="Figure 4: Validation Loss vs Loop Depth and Adaptive Halting Frontiers">
+      <figcaption><b>Figure 4 (Stages 2D, 2H, 2I, 2M, 2N):</b> <b>(A)</b> Validation cross-entropy across recurrent depths <i>r</i> = 1..6 (3-seed means). <b>(B)</b> Stage 2I causal halting frontiers vs fixed depth and the non-causal oracle ceiling on Seed 0: logit entropy exiting is <code>X_WORSE</code> (−0.0305 nats), and linear state probes close only 5.4% (+0.0034 nats, <i>R</i><sup>2</sup> = 0.8%) of the 0.0626-nat oracle gap, whereas fixed depth 3 already achieves within 0.0005 nats of depth 6.</figcaption>
+    </figure>
+
+    <h3 class="subsec" id="sec6-2">6.2 Stages 2D, 2H-Oracle, and 2I: Effort Law (P9) vs Causal Halting Policies (P18)</h3>
+    <p>
+      While the omniscient token-wise oracle satisfies DeepSeek's affine effort law (<span class="badge ok">P9 SUPPORTED</span>, <i>R</i><sup>2</sup> = 0.957 in Stage 2D, 0.993 in Stage 2H-oracle) and beats fixed depth by <code>+0.0626</code> nats (after losing <code>0.0489</code> nats to cross-token KV-cache freezing), <b>Stage 2I</b> proved that no deployable causal exit policy beats fixed depth by <code>0.01</code> nats (<span class="badge bad">P18 REFUTED</span>): ridge-regression state probes explain only <b>0.77%–0.88%</b> of pass-1 marginal benefit variance, and entropy exiting loses to fixed depth by <b>−0.0305 nats</b> (<code>X_WORSE</code>) because confident pass-1 tokens still benefit from second-pass refinement.
+    </p>
+
+    <h3 class="subsec" id="sec6-3">6.3 Stages 2L, 2M, and 2N: The 2×2 Factorial Isolating Why <code>head.weight</code> at 64e-3 Kills Recurrent Depth</h3>
+    <p>
+      When Stage 2L combined <code>LoopGPT</code> + <code>COUNT</code> under the separate-rate recipe (<code>Muon 8e-3, AdamW 64e-3</code>), <code>COUNT</code> lowered validation loss by <b>−0.1722 nats</b> (<span class="badge ok">P21 SUPPORTED</span>), but all six loop depths became flat to within <code>0.00006</code> nats (loop dead). Across <b>Stage 2M</b> and <b>Stage 2N</b>, we executed a complete 2×2 factorial over <code>(embeddings LR) × (head.weight LR)</code> with <code>loop_gain</code> fixed at <code>8e-3</code>:
+    </p>
+
+    <figure class="paper-fig">
+      <img src="../docs/figures/fig5_stage2mn_2x2_diagnosis.svg" alt="Figure 5: Stage 2M/2N 2x2 Factorial Per-Depth Loss and Learned Loop Gain Profile">
+      <figcaption><b>Figure 5 (Stages 2M &amp; 2N 2×2 Factorial):</b> <b>(A)</b> Per-depth validation loss curves across the four factorial cells. <b>(B)</b> Mean absolute learned residual gain |<i>g<sub>r</sub></i>| across passes 1–6 and final unembedding L2 norms ||<code>head.weight</code>||<sub>2</sub>: whenever <code>head.weight</code> trains at <code>64e-3</code> with zero weight decay (<code>EMBEDLOW</code> and <code>GAINLOW</code>), ||<code>head.weight</code>||<sub>2</sub> explodes 7–8× (5,202–5,825 vs ~730), locking the shared readout to pass 1 and collapsing passes 2–6.</figcaption>
+    </figure>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>Table 3: Stage 2M + Stage 2N 2×2 Factorial Over Embeddings LR × <code>head.weight</code> LR (<code>LoopGPT + COUNT</code>, <code>loop_gain</code> at <code>8e-3</code>).</caption>
+        <thead>
+          <tr>
+            <th>Arm &amp; Stage</th>
+            <th>Embeddings LR</th>
+            <th><code>head.weight</code> LR</th>
+            <th class="num">Depth-1 Loss</th>
+            <th class="num">Best-Depth Loss</th>
+            <th class="num">Mean Loop Benefit</th>
+            <th class="num">||<code>head.weight</code>||<sub>2</sub></th>
+            <th>Mean |<code>loop_gain</code>| (Passes 1–4)</th>
+            <th>Registered Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlight">
+            <td><b><code>SHARED</code> (2M)</b></td>
+            <td><code>8e-3</code> (1.0×)</td>
+            <td><code>8e-3</code> (1.0×)</td>
+            <td class="num">3.2388</td>
+            <td class="num"><b>3.2012</b></td>
+            <td class="num"><b>+0.03764</b></td>
+            <td class="num"><b>731.3</b></td>
+            <td><code>0.39, 0.30, 0.19, 0.06</code></td>
+            <td><span class="badge ok">P23 SUPPORTED (Alive)</span></td>
+          </tr>
+          <tr class="highlight">
+            <td><b><code>HEADLOW</code> (2N)</b></td>
+            <td><code>64e-3</code> (8.0×)</td>
+            <td><code>8e-3</code> (1.0×)</td>
+            <td class="num">3.2353</td>
+            <td class="num"><b>3.2044</b></td>
+            <td class="num"><b>+0.03095</b></td>
+            <td class="num"><b>726.7</b></td>
+            <td><code>0.47, 0.34, 0.19, 0.05</code></td>
+            <td><span class="badge ok">P24 SUPPORTED (Alive)</span></td>
+          </tr>
+          <tr class="dead">
+            <td><code>EMBEDLOW</code> (2N)</td>
+            <td><code>8e-3</code> (1.0×)</td>
+            <td><code>64e-3</code> (8.0×)</td>
+            <td class="num">3.2379</td>
+            <td class="num">3.2379</td>
+            <td class="num">+0.00005</td>
+            <td class="num"><b>5,202.0</b></td>
+            <td><code>0.15, 0.01, 0.00, 0.00</code></td>
+            <td><span class="badge bad">P25 REFUTED (Dead)</span></td>
+          </tr>
+          <tr class="dead">
+            <td><code>GAINLOW</code> (2M)</td>
+            <td><code>64e-3</code> (8.0×)</td>
+            <td><code>64e-3</code> (8.0×)</td>
+            <td class="num">3.2184</td>
+            <td class="num">3.2184</td>
+            <td class="num">+0.00002</td>
+            <td class="num"><b>5,824.5</b></td>
+            <td><code>0.12, 0.02, 0.01, 0.01</code></td>
+            <td><span class="badge bad">P22 REFUTED (Dead)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finding-box ok">
+      <div class="fb-title">Key Finding 3 (Stages 2M &amp; 2N): Unembedding Norm Explosion at 64e-3 Locks the Shared Readout to Pass 1</div>
+      Training the untied <code>head.weight</code> at <code>64e-3</code> with zero weight decay is both necessary and sufficient to kill recurrent depth: ||<code>head.weight</code>||<sub>2</sub> balloons 8× (<code>5,202–5,825</code> vs <code>~730</code>) between steps 200 and 1,000, specializing aggressively onto pass 1 so deeper passes disrupt the logit projection and <code>loop_gain</code> shuts passes 2–6 off. Restraining <code>head.weight</code> to <code>8e-3</code> (<code>HEADLOW</code> and <code>SHARED</code>) restores the loop (<code>+0.0309</code> and <code>+0.0376</code> nats benefit), beats <code>GAINLOW</code> on every seed (<code>−0.0140</code> nats, <code>X_BETTER</code>), and reaches <b>3.2012 nats</b> in <code>SHARED</code> (<code>3.2015</code> at depth 3) — <b>−0.2029 nats</b> below <code>B0-M</code>.
+    </div>
+
+    <h2 class="sec" id="sec7">7. Master Ledger of All Pre-Registered Stages and Predictions (P1–P25)</h2>
+    <div class="table-wrap">
+      <table class="data">
+        <caption>Table 4: Complete Audit Trail Across All 16 Pre-Registered Stages (connectome-lm).</caption>
+        <thead>
+          <tr>
+            <th>Stage (Commit)</th>
+            <th>Prediction</th>
+            <th>Hypothesis Tested</th>
+            <th class="num">Measured Effect</th>
+            <th>Registered Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Stage 1</b> (<code>PREREG.md</code>)</td>
+            <td>Primary</td>
+            <td>FlyWire v783 MB brain beats degree-preserving shuffle</td>
+            <td class="num">+0.0144 nats (worse)</td>
+            <td><span class="badge bad">X_WORSE (Refuted)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2T</b> (<code>b4cff14</code>)</td>
+            <td><b>P1, P2</b></td>
+            <td>Activity PR tracks 0.48× rank (P1); relative ΔW larger in real (P2)</td>
+            <td class="num">PR ratio 1.00×; ΔW 0.811</td>
+            <td><span class="badge bad">P1 Refuted; P2 Not Supp.</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2.0</b> (<code>3cba69d</code>)</td>
+            <td>Baseline</td>
+            <td>Muon vs AdamW pilot; S / M / L scaling ladder &amp; SESOI</td>
+            <td class="num">−0.146 nats (Muon 8e-3)</td>
+            <td><span class="badge ok">SESOI = 0.01 Fixed</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2A</b> (<code>a82f04d</code>)</td>
+            <td><b>Gate 1</b></td>
+            <td>Host-RAM COUNT (with LOO) beats B0-M on shared rate</td>
+            <td class="num">−0.0798 nats</td>
+            <td><span class="badge ok">X_BETTER (Gate 1 Pass)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2B-0</b> (<code>95f0517</code>)</td>
+            <td><b>P3, P5, P6</b></td>
+            <td>Offline Kenyon backoff (P3), K-saturation (P5), homeostasis (P6)</td>
+            <td class="num">−0.0151 / −0.0130 nats</td>
+            <td><span class="badge neutral">P5 Supp.; Gate 2 Fail</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2B</b> (<code>stage2b</code>)</td>
+            <td><b>P4</b></td>
+            <td>In-network COUNT + Kenyon K31 beats COUNT on unseen histories</td>
+            <td class="num">+0.0046 nats (+0.0085 unseen)</td>
+            <td><span class="badge bad">NO_DIFF (P4 Refuted)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2C</b> (<code>b58bad5</code>)</td>
+            <td><b>P7, P8</b></td>
+            <td>One-shot writes zero forgetting (P7); Kenyon twin transfer (P8)</td>
+            <td class="num">0.760 recall, 0.000 BWT; 3.0% twin</td>
+            <td><span class="badge ok">P7 &amp; P8 Supported</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2C-2</b> (<code>79e7c51</code>)</td>
+            <td><b>Suspects 1–2</b></td>
+            <td>Consolidation failure caused by teacher drift vs head drift</td>
+            <td class="num">+0.704 recall (clean teacher)</td>
+            <td><span class="badge ok">Teacher Drift Supported</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2C-3</b> (<code>9dd70dc</code>)</td>
+            <td><b>H1a/b, 4a, 4b</b></td>
+            <td>Overlay-channel drift + mem-KL fix (4a); GatedOverlay (4b)</td>
+            <td class="num">0.750 mem-on; −81% / −95.4% LM</td>
+            <td><span class="badge ok">H1a, 4a &amp; 4b Supported</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2D</b> (<code>b4dcde9</code>)</td>
+            <td><b>P9</b></td>
+            <td>DeepSeek affine effort law on exact token-level optimal depth</td>
+            <td class="num">Slope 0.190, R² = 0.957 (0.993 in 2H)</td>
+            <td><span class="badge ok">P9 Supported</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2E</b> (<code>c35f661</code>)</td>
+            <td><b>P10, P11</b></td>
+            <td>Gated COUNT read (P10) and Kenyon-gated (P11) on shared rate</td>
+            <td class="num">−0.0111 nats (P10); +0.0035 (P11)</td>
+            <td><span class="badge neutral">P10 Supp.; P11 Refuted</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2F</b> (<code>bca00eb</code>)</td>
+            <td><b>P12</b></td>
+            <td>Decoupled Muon 8e-3 / AdamW 64e-3 lowers COUNT-M loss</td>
+            <td class="num">−0.0614 nats</td>
+            <td><span class="badge ok">P12 Supported (X_BETTER)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2G</b> (<code>a191a36</code>)</td>
+            <td><b>P13</b></td>
+            <td>COUNT-M beats B0-M when both use separate rates (64e-3)</td>
+            <td class="num">−0.1224 nats</td>
+            <td><span class="badge ok">P13 Supported (X_BETTER)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2H</b> (<code>eabc1c3</code>)</td>
+            <td><b>P17</b></td>
+            <td>Learned per-pass loop_gain + all-depth loss improves LoopGPT</td>
+            <td class="num">−0.0384 nats (3.3336)</td>
+            <td><span class="badge ok">P17 Supported (X_BETTER)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2I</b> (<code>8c6422a</code>)</td>
+            <td><b>P18</b></td>
+            <td>Deployable causal halting rules beat fixed depth by ≥0.01</td>
+            <td class="num">Best probe +0.0034 (entropy −0.0305)</td>
+            <td><span class="badge bad">P18 Refuted</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2K</b> (<code>5454f95</code>)</td>
+            <td><b>P19</b></td>
+            <td>Gated COUNT &amp; 1-scalar control beat COUNT on separate rates</td>
+            <td class="num">+0.0461 &amp; +0.0770 nats (worse)</td>
+            <td><span class="badge bad">P19 Refuted (X_WORSE)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2K2</b> (<code>67b7473</code>)</td>
+            <td><b>P20</b></td>
+            <td>Gated, 1-scalar &amp; 4-scalar at 8e-3 gate rate (5 seeds)</td>
+            <td class="num">+0.0147, +0.0261, +0.0169 nats</td>
+            <td><span class="badge bad">P20 Refuted (Inconclusive)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2L</b> (<code>2ab68af</code>)</td>
+            <td><b>P21</b></td>
+            <td>Plain COUNT lowers LoopGPT loss on separate rates</td>
+            <td class="num">−0.1722 nats (loop passes inert)</td>
+            <td><span class="badge neutral">P21 Supp. (Loop Inert)</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2M</b> (<code>feb582e</code>)</td>
+            <td><b>P22, P23</b></td>
+            <td>GAINLOW (loop_gain 8e-3, P22) vs SHARED (all 8e-3, P23)</td>
+            <td class="num">P22: +0.00002; P23: +0.0376 (3.2012)</td>
+            <td><span class="badge ok">P22 Refuted; P23 Supported</span></td>
+          </tr>
+          <tr>
+            <td><b>Stage 2N</b> (<code>f4d3223</code>)</td>
+            <td><b>P24, P25</b></td>
+            <td>HEADLOW (head 8e-3, P24) vs EMBEDLOW (head 64e-3, P25)</td>
+            <td class="num">P24: +0.0309 (3.2044); P25: +0.00005</td>
+            <td><span class="badge ok">P24 Supported; P25 Refuted</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="sec" id="sec8">8. Discussion and Practical Takeaways</h2>
+    <ol>
+      <li><b>Translate biological motifs into hardware-native data structures, not sparse graph simulations:</b> Simulating the literal 6,293-neuron FlyWire connectome (Stage 1) cost 44× in step time and hurt validation loss (<code>+0.0144</code> nats) because its two-hop ALPN→KC→MBON topology starved early layers of readout signal (Stage 2T). Offloading exact <i>n</i>-gram continuation counts into host RAM (<code>COUNT</code>) and gating test-time associative writes by higher-order history counts (<code>GatedOverlay</code>) exploited plentiful host RAM (5–7 GiB) to give a 13.8M-parameter model the validation loss of a 29.4M-parameter transformer at +3.4% step time and zero GPU VRAM overhead.</li>
+      <li><b>Restrain shared unembedding learning rates in recurrent architectures:</b> Moving from <code>B0-M</code> (<code>3.4041</code>) to <code>LoopGPT + COUNT</code> (<code>SHARED</code>, <code>3.2012</code>; <code>3.2015</code> at depth 3) lowered validation loss by <b>0.2029 nats</b>—exceeding the 0.1431-nat jump from <code>B0-M</code> (13.8M) to <code>B0-L</code> (29.4M). However, Stages 2L–2N proved that an aggressive <code>64e-3</code> AdamW rate on an untied, zero-weight-decay <code>head.weight</code> matrix explodes its L2 norm 8× (<code>&gt;5,200</code>) and locks the shared readout onto pass 1. Restraining <code>head.weight</code> to <code>8e-3</code> eliminates norm explosion (<code>~730</code>), removes seed-to-seed instability, and allows recurrent depth and host-RAM memory to compound cleanly.</li>
+      <li><b>Fixed shallow recurrence (depth 3 with learned per-pass gain) dominates per-token adaptive halting at small scale:</b> Because causal features of the hidden state explain &lt;1% of next-pass benefit variance (Stage 2I) and entropy/margin exits halt tokens prematurely (<code>−0.0305</code> nats), training with a learned per-pass residual gain (<code>loop_gain</code>) and running fixed 3-pass inference (<code>3.2015</code> vs <code>3.2012</code> at depth 6) captures 99.2% of the 6-pass benefit without routing overhead or KV-cache freezing penalties.</li>
+    </ol>
+
+    <h2 class="sec" id="sec9">9. References</h2>
+    <ol class="refs">
+      <li>Bennett, J. E. M., Philippides, A., &amp; Nowotny, T. (2021). Learning with reinforcement prediction errors in a model of the <em>Drosophila</em> mushroom body. <em>Nature Communications</em>, 12, 2569.</li>
+      <li>Cheng, X., et al. (2026). <em>Engram: Scaling Host-Memory N-Gram Tables for Frontier Language Models</em>. arXiv:2601.07372.</li>
+      <li>Clark, D. G., Abbott, L. F., &amp; Litwin-Kumar, A. (2024). Dimension of activity in random neural networks. <em>arXiv:2409.01969</em>.</li>
+      <li>Dagan, I., Lee, L., &amp; Pereira, F. C. N. (1998). Similarity-based models of word cooccurrence probabilities. <em>Machine Learning</em>, 34(1), 43–69.</li>
+      <li>Dasgupta, S., Stevens, C. F., &amp; Navlakha, S. (2017). A neural algorithm for a fundamental computing problem. <em>Science</em>, 358(6364), 793–796.</li>
+      <li>DeepSeek-AI (2026). <em>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</em>. Technical Report, September 2026.</li>
+      <li>Dorkenwald, S., et al. [FlyWire Consortium] (2024). Neuronal wiring diagram of an adult brain. <em>Nature</em>, 634, 124–138 (FlyWire v783).</li>
+      <li>Jeddi, A., et al. (2026). <em>LoopFormer: Budget-Conditioned Recurrent Depth in Transformers</em>. arXiv:2602.11451.</li>
+      <li>Litwin-Kumar, A., Harris, K. D., Axel, R., Sompolinsky, H., &amp; Abbott, L. F. (2017). Optimal degrees of synaptic connectivity. <em>Neuron</em>, 93(5), 1153–1164.</li>
+      <li>Magnusson, I., Smith, N. A., &amp; Koh, P. W. (2026). <em>COUNT: Non-Parametric Host-Memory N-Gram Amplification for Language Models</em>. arXiv:2610.20456.</li>
+      <li>Marek, P., et al. (2026). <em>Self-Generated Replay with KL Consistency Prevents Catastrophic Forgetting</em>. arXiv:2605.26097.</li>
+      <li>McClelland, J. L., McNaughton, B. L., &amp; O'Reilly, R. C. (1995). Why there are complementary learning systems in the hippocampus and neocortex. <em>Psychological Review</em>, 102(3), 419–457.</li>
+      <li>Senge, M., et al. (2026). <em>Connectome Topology vs Random Expansion in Fly-Hash Retrieval</em>. arXiv:2610.09114.</li>
+      <li>Tang, Y., et al. (2026). <em>LoopRPT: Reinforcement Post-Training for Looped Language Models</em>. arXiv:2603.19714.</li>
+      <li>Zhu, X., et al. (2025). <em>Ouro: Recurrent Depth Transformers with Entropy-Regularized Halting</em>. arXiv:2510.25741.</li>
+    </ol>
+  </article>
+</div>
+
+</body>
+</html>
