@@ -19,7 +19,7 @@
 }
 
 \title{\textbf{From Connectome Wiring to Counted Memory and Recurrent Depth:\\Pre-Registered Tests of \emph{Drosophila} Mushroom-Body Principles\\in Small Language Models}}
-\author{Nate \\ \small Independent Researcher}
+\author{Nate Farrow \\ \small Independent Researcher}
 \date{17 November 2026}
 
 \begin{document}
@@ -28,9 +28,9 @@
 \begin{abstract}
 Biological neural circuits inspire machine learning both as literal connectivity graphs and as algorithmic motifs---sparse random expansion, homeostatic competition, fast associative memory, and adaptive recurrent computation. Across \textbf{16 pre-registered stages} (101 production training and evaluation runs, \textbf{25 registered predictions P1--P25}, and a \textbf{218-mutant automated test audit}), we systematically test where \emph{Drosophila} mushroom-body principles help---and where they fail---in small language models (5M--29M parameters trained on 200M tokens of FineWeb-Edu).
 
-First, in \textbf{Stage 1} and \textbf{Stage 2T}, replacing a 6-layer transformer's feed-forward networks with a shared recurrent reservoir wired like the adult \emph{Drosophila} mushroom body (FlyWire v783: 6,293 neurons, 570,682 synapses) performs \textbf{reliably worse} than degree-preserving random shuffles ($\text{real} - \text{shuf} = +0.0126, +0.0147, +0.0160$ nats/token, verdict \texttt{X\_WORSE}) and dense or Erd\H{o}s--R\'enyi controls ($\text{dense} < \text{er} < \text{real\_randio} \approx \text{shuf} < \text{real}$). While the real connectome has half the effective rank of its shuffles ($0.48\times$), its full-brain activity participation ratio equals the shuffles ($\text{real} \div \text{shuf} = 1.00$, refuting P1); instead, its three-layer anatomical routing ($\text{ALPN} \to \text{KC} \to \text{MBON}$) leaves only \textbf{19.5\%} of readout neurons one hop from an input (versus \textbf{95.5\%} in degree-preserving shuffles), delaying readout dimensionality by one recurrent step.
+First, in \textbf{Stage 1} and \textbf{Stage 2T}, replacing a 6-layer transformer's feed-forward networks with a shared recurrent reservoir wired like the adult \emph{Drosophila} mushroom body (FlyWire v783: 6,293 neurons, 570,682 synapses) performs \textbf{reliably worse} than degree-preserving random shuffles ($\text{real} - \text{shuf} = +0.0126, +0.0147, +0.0160$ nats/token, verdict \texttt{X\_WORSE}) and dense or Erd\H{o}s--R\'enyi controls ($\text{dense} < \text{er} < \text{real\_randio} \approx \text{shuf} < \text{real}$). While the real connectome has half the effective rank of its shuffles ($0.48\times$), its full-brain activity participation ratio matches the shuffles ($\text{real} \div \text{shuf} = 1.00$, refuting P1); instead, its three-layer anatomical routing ($\text{ALPN} \to \text{KC} \to \text{MBON}$) leaves only \textbf{19.5\%} of readout neurons one hop from an input (versus \textbf{95.5\%} in degree-preserving shuffles), delaying readout dimensionality by one recurrent step.
 
-Second, in \textbf{Stages 2.0--2B and 2E--2K2}, we replace literal connectome wiring with a counted host-RAM $n$-gram memory (\textbf{COUNT}, orders 2--5 over 881M tokens, 5.15 GiB host RAM, zero GPU parameters) and test a mushroom-body similarity backoff (\textbf{Kenyon hash}: fixed PPMI token codes, sparse random expansion $K=31$, homeostatic $k$-winners-take-all into $4.19\times 10^6$ buckets). Online \textbf{leave-one-out} count subtraction during training is essential, preventing a \textbf{+0.84 nat} validation collapse from target leakage. On equally tuned separate learning rates (Muon $8\times 10^{-3}$ on block matrices, AdamW $64\times 10^{-3}$ on embeddings and head), plain COUNT lowers 13.8M-parameter (\texttt{Size M}) validation loss by \textbf{$-0.1224$ nats} ($3.3853 \to 3.2629$, \texttt{X\_BETTER}, P12--P13), matching a \textbf{29.4M-parameter (\texttt{Size L})} baseline at $+3.4\%$ step time and zero additional VRAM. However, while the Kenyon similarity backoff improves an offline $n$-gram model on unseen and rare histories ($+0.0151$ and $+0.0130$ nats, P5 supported), that gain \textbf{vanishes inside the neural network} ($+0.0046$ nats vs plain COUNT, \texttt{NO\_MEANINGFUL\_DIFFERENCE}, P4 refuted). Likewise, learned per-order/per-bin gates and scalar controls (\textbf{Stages 2E, 2K, 2K2}) fail to beat plain COUNT once embeddings and the unembedding head train at $64\times 10^{-3}$ (P19--P20 refuted).
+Second, in \textbf{Stages 2.0--2B and 2E--2K2}, we replaced literal connectome wiring with a counted host-RAM $n$-gram memory (\textbf{COUNT}, orders 2--5 over 881M tokens, 5.15 GiB host RAM, zero GPU parameters) and test a mushroom-body similarity backoff (\textbf{Kenyon hash}: fixed PPMI token codes, sparse random expansion $K=31$, homeostatic $k$-winners-take-all into $4.19\times 10^6$ buckets). Online \textbf{leave-one-out} count subtraction during training is essential, preventing a \textbf{+0.84 nat} validation collapse from target leakage. On equally tuned separate learning rates (Muon $8\times 10^{-3}$ on block matrices, AdamW $64\times 10^{-3}$ on embeddings and head), plain COUNT lowers 13.8M-parameter (\texttt{Size M}) validation loss by \textbf{$-0.1224$ nats} ($3.3853 \to 3.2629$, \texttt{X\_BETTER}, P12--P13), matching a \textbf{29.4M-parameter (\texttt{Size L})} baseline at $+3.4\%$ step time and zero additional VRAM. However, while the Kenyon similarity backoff improves an offline $n$-gram model on unseen and rare histories ($+0.0151$ and $+0.0130$ nats, P5 supported), that gain \textbf{vanishes inside the neural network} ($+0.0046$ nats vs plain COUNT, \texttt{NO\_MEANINGFUL\_DIFFERENCE}, P4 refuted). Likewise, learned per-order/per-bin gates and scalar controls (\textbf{Stages 2E, 2K, 2K2}) fail to beat plain COUNT once embeddings and the unembedding head train at $64\times 10^{-3}$ (P19--P20 refuted).
 
 Third, in \textbf{Stages 2C, 2C-2, and 2C-3}, we test complementary learning systems (CLS) using gradient-free one-shot count writes (\texttt{Overlay}) followed by KL-anchored replay consolidation into slow weights. One-shot writes learn 4 sequential lists of 384 cue--answer pairs (1,536 pairs) with \textbf{0.760 recall} and \textbf{zero catastrophic forgetting} ($\text{backward transfer} = 0.000$ vs $-0.330$ and $-0.651$ for gradient fine-tuning, P7 supported). We show that standard sequential replay consolidation collapses ($0.061$ recall) due to \textbf{teacher drift} (Stage 2C-2, $+0.704$ recovery with an untouched teacher) and \textbf{overlay-channel drift} (Stage 2C-3, H1a supported: consolidating with the overlay off de-calibrates the backbone's memory-reading pathway, dropping recall on an unseen 5th list from $0.797$ to $0.177$). Adding a \textbf{memory-on KL consistency loss} restores both memory-off ($0.731$) and memory-on ($0.750$) consolidated recall while preserving unseen-list reading ($0.763$). Furthermore, gating test-time overlay writes by stored $n$-gram history counts (\texttt{GatedOverlay}) preserves \textbf{100\% of quiz recall ($0.7602$) while cutting English validation loss interference by 81.0\%} at $C(h_3)\le 0$, and cuts interference by \textbf{95.4\% ($+0.038$ nats)} at $C(h_2)\le 9$.
 
@@ -54,14 +54,14 @@ In Stage 1, we replaced the feed-forward networks of a 6-layer pre-norm GPT ($d_
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{../docs/architecture_as_built.png}
+    \includegraphics[width=0.98\textwidth]{figures/architecture_as_built.png}
     \caption{Stage 1 \texttt{connectome-lm} architecture as built (6-layer pre-norm GPT with one recurrent \texttt{SharedBrain} wired from FlyWire v783 mushroom-body connectivity).}
     \label{fig:arch}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{../docs/figures/fig1_stage1_connectome.png}
+    \includegraphics[width=0.98\textwidth]{figures/fig1_stage1_connectome.png}
     \caption{(A) Stage 1 validation cross-entropy across the five connectome arms. (B) Stage 2T participation ratio $\text{PR} = (\text{tr}\,C)^2/\text{tr}(C^2)$ across layers 1--6 for full-brain versus 256 readout neurons.}
     \label{fig:stage1}
 \end{figure}
@@ -76,7 +76,7 @@ In Stage 2A, we built host-RAM \textbf{COUNT} tables (orders 2--5, $c_{\min}=(1,
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{../docs/figures/fig2_memory_ladder_and_classes.png}
+    \includegraphics[width=0.98\textwidth]{figures/fig2_memory_ladder_and_classes.png}
     \caption{(A) B0 size ladder vs host-RAM COUNT and looped models at Size M ($13.8\text{M}$ backbone parameters). (B) Validation cross-entropy difference vs B0-M across exact 4-token history count classes.}
     \label{fig:memory}
 \end{figure}
@@ -89,7 +89,7 @@ In Stage 2C, one-shot count writes (\texttt{Overlay}, $w=4.0$) learned 4 sequent
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{../docs/figures/fig3_cls_consolidation.png}
+    \includegraphics[width=0.98\textwidth]{figures/fig3_cls_consolidation.png}
     \caption{(A) Sequential list recall and held-out 5th-list recall across gradient fine-tuning, one-shot writes, rolling-teacher consolidation, untouched-teacher consolidation, and memory-on KL consistency repair. (B) Context-gated overlay trade-off between quiz recall and English validation loss rise.}
     \label{fig:cls}
 \end{figure}
@@ -102,14 +102,14 @@ In Stage 2D and Stage 2H, we studied \texttt{LoopGPT} (2 prelude blocks, a share
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{../docs/figures/fig4_loop_depth_and_halting.png}
+    \includegraphics[width=0.98\textwidth]{figures/fig4_loop_depth_and_halting.png}
     \caption{(A) Validation loss across recurrent loop depths $r=1\dots 6$. (B) Stage 2I adaptive halting frontiers vs fixed depth and the executed oracle ceiling.}
     \label{fig:loop}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.98\textwidth]{../docs/figures/fig5_stage2mn_2x2_diagnosis.png}
+    \includegraphics[width=0.98\textwidth]{figures/fig5_stage2mn_2x2_diagnosis.png}
     \caption{(A) Stage 2M/2N $2\times 2$ factorial per-depth validation loss curves. (B) Learned per-pass $|g_r|$ profiles and \texttt{head.weight} L2 norms showing how \texttt{head.weight} at $64\times 10^{-3}$ explodes $8\times$ and collapses passes 2--6.}
     \label{fig:diag}
 \end{figure}
